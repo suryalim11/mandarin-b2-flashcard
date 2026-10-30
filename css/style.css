@@ -1,4 +1,9 @@
 /* 華語 B2 Flashcard — styles */
+/* Plus Jakarta Sans (OFL, lihat fonts/OFL.txt) dibundel lokal supaya tetap offline; hanzi memakai font sistem */
+@font-face {
+  font-family: "Plus Jakarta Sans"; font-style: normal; font-weight: 200 800; font-display: swap;
+  src: url("../fonts/plus-jakarta-sans-latin-wght-normal.woff2") format("woff2");
+}
 :root {
   --bg: #f5f6f8; --surface: #ffffff; --surface2: #eef1f5; --text: #1d2330; --muted: #5a6475;
   --border: #dfe3ea; --brand: #23665f; --brand-ink: #ffffff; --brand-soft: #dff0ed;
@@ -6,7 +11,7 @@
   --t1: #d03a3a; --t2: #12805f; --t3: #2862c8; --t4: #8a3fc2; --t5: #6b7280;
   --shadow: 0 1px 2px rgba(20,30,50,.06), 0 4px 16px rgba(20,30,50,.06);
   --radius: 16px; --gap: 16px;
-  --font: -apple-system, "Segoe UI", system-ui, sans-serif;
+  --font: "Plus Jakarta Sans", -apple-system, "Segoe UI", system-ui, sans-serif;
   --hanzi: "PingFang TC", "Microsoft JhengHei", "Noto Sans TC", "Heiti TC", sans-serif;
   --nav-h: 62px;
 }
@@ -140,7 +145,8 @@ details.tip > summary { cursor: pointer; padding: 4px 0; }
   display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 0 14px; border-radius: 999px; border: 1px solid var(--border);
   background: var(--surface); font-size: .92rem; font-weight: 500;
 }
-.chip.on { background: var(--brand); border-color: var(--brand); color: var(--brand-ink); }
+/* chip terpilih = lembut (bukan solid), supaya tidak bersaing dengan tombol utama */
+.chip.on { background: var(--brand-soft); border-color: var(--brand); color: var(--brand); font-weight: 700; }
 .chip.small { min-height: 38px; padding: 0 12px; }
 @media (pointer: coarse) { .chip, .chip.small { min-height: 44px; } }
 .seg { display: flex; background: var(--surface2); border-radius: 12px; padding: 3px; gap: 2px; }
@@ -324,3 +330,80 @@ details.info h3 { margin-top: 10px; }
   .two-col > .main { grid-column: 1; grid-row: 1; min-width: 0; }
   .two-col > .side { grid-column: 2; grid-row: 1; position: sticky; top: 20px; }
 }
+
+/* ===================== v1.1 — sistem desain ===================== */
+/* Tipografi: skala 1.25, judul tegas, angka tabular */
+body { font-feature-settings: "cv11" 1, "ss01" 1; text-rendering: optimizeLegibility; -webkit-font-smoothing: antialiased; }
+h1, h2 { text-wrap: balance; }
+.screen-head h1 { font-size: 1.75rem; font-weight: 800; letter-spacing: -.02em; }
+.screen-head .sub { font-size: .875rem; }
+.panel h2 { font-size: 1.125rem; font-weight: 750; letter-spacing: -.01em; display: flex; align-items: center; gap: 8px; }
+.stat-line, .progress-line, .deck-row .small, .rate-bar small, .badge { font-variant-numeric: tabular-nums; }
+.btn { font-weight: 650; letter-spacing: -.005em; }
+
+/* Ikon garis */
+.i { width: 1.15em; height: 1.15em; flex: none; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; vertical-align: -.2em; }
+.i.fill { fill: currentColor; stroke: none; }
+.i.good { color: var(--good); } .i.bad { color: var(--bad); }
+.i.flame { color: #e8590c; }
+.btn .i, .chip .i { width: 1.2em; height: 1.2em; }
+.icon-btn .i { width: 22px; height: 22px; }
+.listen-btn { display: inline-grid; place-items: center; }
+.listen-btn .i { width: 46px; height: 46px; }
+.tip .i { color: var(--brand); }
+.tip.warn .i { color: var(--warn); }
+
+/* Tanda hanzi dek */
+.deck-mark { display: inline-grid; place-items: center; flex: none; width: 1.5em; height: 1.5em; margin-right: 2px; border-radius: 6px;
+  background: var(--brand-soft); color: var(--brand); font-family: var(--hanzi); font-weight: 600; font-size: .9em; line-height: 1; }
+.deck-mark.lg { width: 40px; height: 40px; border-radius: 11px; font-size: 1.25rem; margin-right: 0; }
+.chip.on .deck-mark { background: var(--surface); }
+.deck-badge .deck-mark { width: 1.6em; height: 1.6em; }
+
+/* Perayaan: ungkapan Mandarin, bukan emoji */
+.cheer { margin: 4px auto 6px; }
+.cheer-zh { font-family: var(--hanzi); font-size: 2.6rem; font-weight: 700; line-height: 1.15; color: var(--brand); letter-spacing: .04em; }
+.cheer-py { color: var(--muted); font-size: .875rem; margin-top: 4px; }
+
+/* Umpan balik benar/salah */
+.fb-tag { display: inline-flex; align-items: center; gap: 4px; font-weight: 750; }
+.fb-tag.good { color: var(--good); } .fb-tag.bad { color: var(--bad); }
+.mistake p.mk { display: flex; align-items: flex-start; gap: 8px; }
+.mistake p.mk .i { margin-top: .35em; }
+
+/* Free talk: kartu topik (hanzi + arti) */
+.ft-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+.ft-item { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-height: 64px; padding: 10px 12px; text-align: left;
+  border: 1px solid var(--border); border-radius: 12px; background: var(--surface); color: var(--text); }
+.ft-item .zh { font-size: 1.05rem; font-weight: 600; }
+
+/* Tab mode dialog: ikon di atas label, tidak terpotong di HP */
+.seg.tabs button { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; min-height: 54px; font-size: .8rem; }
+.seg.tabs button .i { width: 20px; height: 20px; }
+@media (min-width: 560px) { .seg.tabs button { flex-direction: row; gap: 6px; min-height: 44px; font-size: .9rem; } }
+
+/* Toolbar ringkas (Dengar & Baca) */
+.toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 12px; }
+.toolbar .chips { gap: 6px; }
+.toolbar .seg { margin-left: auto; min-width: 150px; }
+.toolbar .btn.primary { padding: 0 14px; }
+
+/* Interaksi: hover hanya untuk pointer presisi; tekan untuk semua */
+@media (hover: hover) and (pointer: fine) {
+  .btn:hover { border-color: var(--brand); }
+  .btn.primary:hover { filter: brightness(1.08); }
+  .chip:hover, .ft-item:hover, .d-card:hover, .step:hover, .opt:hover:not([disabled]) { border-color: var(--brand); }
+  .icon-btn:hover { border-color: var(--brand); color: var(--brand); }
+  .seg button:not(.on):hover { color: var(--text); }
+  #nav a:not(.on):hover { color: var(--text); }
+}
+.chip:active, .ft-item:active, .d-card:active, .step:active, .icon-btn:active, .opt:active { transform: scale(.98); }
+.btn, .chip, .ft-item, .d-card, .step, .icon-btn, .opt, .seg button { transition: border-color .15s ease, background-color .15s ease, color .15s ease, transform .1s ease; }
+
+/* Gerak: kartu baru masuk halus */
+@keyframes cardIn { from { opacity: 0; transform: translateY(8px) scale(.985); } to { opacity: 1; transform: none; } }
+.cardwrap { animation: cardIn .22s ease-out; }
+@media (prefers-reduced-motion: reduce) { .cardwrap { animation: none; } .btn, .chip, .ft-item, .d-card, .step, .icon-btn, .opt { transition: none; } }
+/* bar nilai sticky: latar penutup supaya isi kartu tidak tembus di sela tombol */
+.rate-bar { padding: 8px 0; background: var(--bg); box-shadow: 0 -12px 14px -6px var(--bg); }
+@media (max-width: 559px) { .toolbar .btn.primary { flex: 1 1 100%; } .toolbar .seg { min-width: 140px; } }

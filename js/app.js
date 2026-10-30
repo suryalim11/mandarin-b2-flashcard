@@ -2,7 +2,7 @@
 (function () {
   "use strict";
   var W = window, D = document;
-  var VERSION = "1.0.0";
+  var VERSION = "1.1.0";
   var KEY = "mb2.v1";
 
   /* =========================================================
@@ -26,7 +26,7 @@
   function pct(a, b) { return b ? Math.round(100 * a / b) : 0; }
   function tcolor(zh, py) { return S.settings.toneColors ? Pinyin.colorize(zh, py) : esc(zh); }
   function playBtn(text, cls) {
-    return '<button type="button" class="icon-btn ' + (cls || "") + '" data-act="speak" data-t="' + esc(text) + '" aria-label="Putar audio">🔊</button>';
+    return '<button type="button" class="icon-btn ' + (cls || "") + '" data-act="speak" data-t="' + esc(text) + '" aria-label="Putar audio">' + I("vol") + '</button>';
   }
   function head(title, sub, right) {
     return '<header class="screen-head"><div><h1>' + title + "</h1>" + (sub ? '<div class="sub">' + sub + "</div>" : "") + "</div>" +
@@ -35,6 +35,38 @@
   // ikon SVG yang sama dengan navigasi (bukan emoji) supaya konsisten di semua platform
   var ICON_GEAR = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 3v2.5M12 18.5V21M3 12h2.5M18.5 12H21M5.6 5.6l1.8 1.8M16.6 16.6l1.8 1.8M5.6 18.4l1.8-1.8M16.6 7.4l1.8-1.8"/></svg>';
   var ICON_HOME = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11.5 12 4l9 7.5M5.5 10v9.5h13V10"/></svg>';
+
+  /* ikon garis (pengganti emoji) — satu gaya untuk semua platform */
+  var ICONS = {
+    vol: '<path d="M11 5 6 9H3v6h3l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M18.5 5.5a9 9 0 0 1 0 13"/>',
+    volx: '<path d="M11 5 6 9H3v6h3l5 4z"/><path d="m16 9 5 6M21 9l-5 6"/>',
+    play: '<path d="M7 4.8v14.4a.8.8 0 0 0 1.2.7l11.3-7.2a.8.8 0 0 0 0-1.4L8.2 4.1A.8.8 0 0 0 7 4.8z"/>',
+    stop: '<rect x="6" y="6" width="12" height="12" rx="2"/>',
+    copy: '<rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15H4.5A1.5 1.5 0 0 1 3 13.5v-9A1.5 1.5 0 0 1 4.5 3h9A1.5 1.5 0 0 1 15 4.5V5"/>',
+    down: '<path d="M12 4v11M7 10.5l5 5 5-5M5 20h14"/>',
+    up: '<path d="M12 20V9M7 13.5l5-5 5 5M5 4h14"/>',
+    eye: '<path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="3"/>',
+    mic: '<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/>',
+    trash: '<path d="M4 7h16M9.5 7V4.5h5V7M6.5 7l1 13h9l1-13M10 11v5.5M14 11v5.5"/>',
+    check: '<path d="m5 12.5 4.5 4.5L19 7.5"/>',
+    x: '<path d="M6 6l12 12M18 6 6 18"/>',
+    spark: '<path d="M12 3.5 13.8 9l5.7 1.9-5.7 1.9L12 18.5l-1.8-5.7-5.7-1.9L10.2 9z"/><path d="M19 3v3.5M17.25 4.75h3.5"/>',
+    head: '<path d="M4 18v-5a8 8 0 0 1 16 0v5"/><rect x="3.5" y="14" width="4" height="6" rx="1.5"/><rect x="16.5" y="14" width="4" height="6" rx="1.5"/>',
+    users: '<circle cx="9" cy="8.5" r="3.5"/><path d="M3 20a6 6 0 0 1 12 0"/><path d="M15.5 5.2a3.5 3.5 0 0 1 0 6.6M17.5 14.4A6 6 0 0 1 21 20"/>',
+    repeat: '<path d="M17 3l3 3-3 3"/><path d="M4 11.5V10a4 4 0 0 1 4-4h12"/><path d="M7 21l-3-3 3-3"/><path d="M20 12.5V14a4 4 0 0 1-4 4H4"/>',
+    bulb: '<path d="M9.5 18h5M10.5 21h3"/><path d="M12 3a6 6 0 0 0-3.6 10.8c.7.6 1.1 1.4 1.1 2.2h5c0-.8.4-1.6 1.1-2.2A6 6 0 0 0 12 3z"/>',
+    flame: '<path d="M12 3c.6 3.2 4.5 5.2 4.5 10a4.5 4.5 0 0 1-9 0c0-1.9.8-3.2 1.8-4.2.3 1.3.9 2.2 1.9 2.7C11 8.6 10.6 5.8 12 3z"/>',
+    phone: '<rect x="6.5" y="2.5" width="11" height="19" rx="2.5"/><path d="M11 18.5h2"/>',
+    share: '<path d="M12 15V3.5M8 7.5l4-4 4 4"/><path d="M8 11H6.5A1.5 1.5 0 0 0 5 12.5v7A1.5 1.5 0 0 0 6.5 21h11a1.5 1.5 0 0 0 1.5-1.5v-7a1.5 1.5 0 0 0-1.5-1.5H16"/>'
+  };
+  function I(name, cls) { return '<svg class="i' + (cls ? " " + cls : "") + '" viewBox="0 0 24 24" aria-hidden="true">' + (ICONS[name] || "") + "</svg>"; }
+  // tanda hanzi per dek (視/銷/攝/…) menggantikan emoji — sekaligus jadi materi hafalan
+  function deckMark(d, size) { return '<span class="deck-mark' + (size ? " " + size : "") + '" aria-hidden="true">' + esc(d.mark || (d.zh || "?").charAt(0)) + "</span>"; }
+  // perayaan berupa ungkapan Mandarin + pinyin + arti (bukan emoji)
+  function cheer(zh, py, idm) { return '<div class="cheer"><div class="cheer-zh">' + zh + '</div><div class="cheer-py">' + py + " · " + idm + "</div></div>"; }
+  function okTag(t) { return '<span class="fb-tag good">' + I("check") + " " + t + "</span>"; }
+  function noTag(t) { return '<span class="fb-tag bad">' + I("x") + " " + t + "</span>"; }
+  function playAllLabel() { return I("play", "fill") + " Putar semua"; }
   function view(html) { $("#view").innerHTML = html; }
 
   /* toast + modal */
@@ -139,7 +171,7 @@
   function buildDecks() {
     DECKS = arr(W.DECKS).slice();
     if (!DECKS.length) {
-      DECKS = [{ id: "phrases", kind: "phrase", icon: "💬", zh: "會話句型", name: "Kalimat Percakapan" }, { id: "claude", kind: "custom", icon: "🤖", zh: "我的卡片", name: "Dari Claude" }];
+      DECKS = [{ id: "phrases", kind: "phrase", icon: "💬", mark: "話", zh: "會話句型", name: "Kalimat Percakapan" }, { id: "claude", kind: "custom", icon: "🤖", mark: "我", zh: "我的卡片", name: "Dari Claude" }];
     }
   }
   function rebuildCards() {
@@ -283,7 +315,7 @@
     // ringkas: satu baris, instruksi hanya untuk platform yang sedang dipakai
     var how = isIOS() ? "Settings → Accessibility → Spoken Content → Voices → Chinese (Taiwan) → unduh Meijia."
       : "Settings → Time &amp; language → Language &amp; region → tambah 中文(台灣) lalu pasang paket Speech.";
-    return '<details class="panel tip warn"><summary><b>🔈 ' + (TTS.status() === "none" ? "Suara Mandarin belum terpasang" : "Suara Mandarin Taiwan belum terpasang") +
+    return '<details class="panel tip warn"><summary><b>' + I("volx") + " " + (TTS.status() === "none" ? "Suara Mandarin belum terpasang" : "Suara Mandarin Taiwan belum terpasang") +
       '</b> <span class="small muted">· cara pasang</span></summary><p class="small mt">' + how + "</p></details>";
   }
   TTS.onChange(function () { if (CUR.name === "home" || CUR.name === "settings") rerender(); });
@@ -297,7 +329,7 @@
     try { dateStr = new Date().toLocaleDateString("id-ID", { weekday: "long", day: "numeric", month: "long" }); } catch (e) { dateStr = t; }
     var dl = suggestDialogue();
     var sd = dy.sessionDone;
-    var h = head("華語 B2", esc(dateStr) + " &nbsp;·&nbsp; 🔥 " + streakNow() + " hari");
+    var h = head("華語 B2", esc(dateStr) + " &nbsp;·&nbsp; " + I("flame", "flame") + " " + streakNow() + " hari");
     h += '<div class="stack">';
 
     function step(n, done, label, sub, act, extra) {
@@ -322,7 +354,7 @@
       var cs = CARDS.filter(function (c) { return c.deck === d.id; });
       var l = cs.filter(function (c) { return isLearned(S.srs[c.key]); }).length;
       var m = cs.filter(function (c) { var st = S.srs[c.key]; return st && st.interval >= 21; }).length;
-      var inner = '<span class="ic" aria-hidden="true">' + esc(d.icon) + '</span><div class="grow"><div class="row between"><span><b>' + esc(d.name) +
+      var inner = deckMark(d, "lg") + '<div class="grow"><div class="row between"><span><b>' + esc(d.name) +
         '</b> <span class="zh muted small">' + esc(d.zh) + '</span></span><span class="small muted">' + (cs.length ? l + " / " + cs.length + (m ? " · " + m + " dikuasai" : "") : "belum ada kartu") + '</span></div>' +
         '<div class="bar"><i style="width:' + pct(l, cs.length) + '%"></i></div></div>';
       // baris dek = pintasan langsung ke latihan dek itu
@@ -332,10 +364,10 @@
     h += "</section>";
 
     if (isIOS() && !isStandalone() && !dismissedInstall && !S.hints.install) {
-      h += '<section class="panel tip"><div class="row between"><b>📲 Pasang di Home Screen</b><button class="btn sm" data-act="hint-install-x">Tutup</button></div>' +
-        '<p class="small mb" style="margin-top:6px">Buka lewat Safari, tap Share ⬆️ → <b>Add to Home Screen</b>. Setelah itu app bisa dipakai offline layaknya aplikasi biasa.</p></section>';
+      h += '<section class="panel tip"><div class="row between"><b>' + I("phone") + ' Pasang di Home Screen</b><button class="btn sm" data-act="hint-install-x">Tutup</button></div>' +
+        '<p class="small mb" style="margin-top:6px">Buka lewat Safari, tap Share ' + I("share") + ' → <b>Add to Home Screen</b>. Setelah itu app bisa dipakai offline layaknya aplikasi biasa.</p></section>';
     } else if (deferredPrompt) {
-      h += '<section class="panel tip row between"><span><b>📲 Pasang aplikasi</b><br><span class="small">Pakai offline dari desktop / layar utama.</span></span><button class="btn primary" data-act="install">Install app</button></section>';
+      h += '<section class="panel tip row between"><span><b>' + I("phone") + ' Pasang aplikasi</b><br><span class="small">Pakai offline dari desktop / layar utama.</span></span><button class="btn primary" data-act="install">Install app</button></section>';
     }
     if (TTS.status() !== "tw") h += ttsHelpHtml();
     h += "</div>";
@@ -345,12 +377,12 @@
   function transferHtml() {
     return '<section class="panel"><h2>Pindah progres antar-perangkat</h2>' +
       '<p class="small muted">Progres tersimpan di perangkat ini saja. Salin kode (atau unduh file) lalu impor di perangkat lain.</p>' +
-      '<div class="row wrap"><button class="btn soft" data-act="xfer-copy">📋 Salin kode progres</button><button class="btn" data-act="xfer-download">⬇️ Unduh file .json</button></div>' +
+      '<div class="row wrap"><button class="btn soft" data-act="xfer-copy">' + I("copy") + ' Salin kode progres</button><button class="btn" data-act="xfer-download">' + I("down") + ' Unduh file .json</button></div>' +
       '<textarea id="code-out" class="mono mt" readonly hidden aria-label="Kode progres"></textarea>' +
       '<label class="small muted mt" style="display:block" for="code-in">Tempel kode dari perangkat lain</label>' +
       '<textarea id="code-in" class="mono" placeholder="MB2G:… atau MB2P:…"></textarea>' +
       '<div class="row wrap mt"><button class="btn primary" data-act="xfer-import">Impor</button>' +
-      '<label class="btn" style="cursor:pointer">⬆️ Unggah file<input type="file" accept=".json,application/json,text/plain" data-chg="xfer-file" hidden></label></div></section>';
+      '<label class="btn" style="cursor:pointer">' + I("up") + ' Unggah file<input type="file" accept=".json,application/json,text/plain" data-chg="xfer-file" hidden></label></div></section>';
   }
   ACT["home-cards"] = function () { CS.decks = []; CS.fresh = true; go("#/cards"); };
   ACT["home-talk"] = function (el) { var id = el.getAttribute("data-id"); go(id ? "#/talk/" + encodeURIComponent(id) : "#/talk"); };
@@ -464,11 +496,11 @@
     DECKS.forEach(function (d) {
       var n = CARDS.filter(function (c) { return c.deck === d.id; }).length;
       if (!n) return;
-      chips += '<button type="button" class="chip ' + (CS.decks.indexOf(d.id) >= 0 ? "on" : "") + '" data-act="deck-chip" data-d="' + esc(d.id) + '">' + esc(d.icon) + " " + esc(d.name) + "</button>";
+      chips += '<button type="button" class="chip ' + (CS.decks.indexOf(d.id) >= 0 ? "on" : "") + '" data-act="deck-chip" data-d="' + esc(d.id) + '">' + deckMark(d) + esc(d.name) + "</button>";
     });
     h += '<div class="chips mb scroll-x" role="group" aria-label="Pilih dek">' + chips + "</div>";
     h += '<div class="seg" role="group" aria-label="Arah kartu" style="max-width:560px;margin:0 auto">' +
-      [["zh2id", "中文→Arti"], ["id2zh", "Arti→中文"], ["listen", "🔊→Arti"]].map(function (x) {
+      [["zh2id", "中文→Arti"], ["id2zh", "Arti→中文"], ["listen", I("vol") + "→Arti"]].map(function (x) {
         return '<button type="button" class="' + (CS.dir === x[0] ? "on" : "") + '" data-act="dir" data-v="' + x[0] + '">' + x[1] + "</button>";
       }).join("") + "</div>";
     h += '<div id="cardarea"></div>';
@@ -495,11 +527,11 @@
 
   function cardFront(c) {
     var db = deckById(c.deck);
-    var badge = '<span class="badge deck-badge">' + esc(db ? db.icon + " " + db.name : "") + "</span>";
+    var badge = '<span class="badge deck-badge">' + (db ? deckMark(db) + esc(db.name) : "") + "</span>";
     var long = Array.from(c.zh).length > 6 ? " long" : "";
     if (CS.dir === "listen") {
       return '<div class="face front" aria-label="Sisi depan">' + badge +
-        '<button type="button" class="listen-btn" data-act="speak" data-t="' + esc(c.zh) + '" aria-label="Putar audio">🔊</button>' +
+        '<button type="button" class="listen-btn" data-act="speak" data-t="' + esc(c.zh) + '" aria-label="Putar audio">' + I("vol") + '</button>' +
         '<div class="hint">Dengarkan, lalu ingat artinya</div></div>';
     }
     if (CS.dir === "id2zh") {
@@ -542,7 +574,7 @@
     var area = $("#cardarea");
     if (!area) return;
     if (!CARDS.length) {
-      area.innerHTML = '<div class="celebrate"><div class="big">📭</div><h2>Belum ada kartu</h2><p class="muted">Data kosakata belum termuat. Pastikan folder <code>data/</code> ada.</p></div>';
+      area.innerHTML = '<div class="celebrate">' + cheer("空", "kōng", "kosong") + '<h2>Belum ada kartu</h2><p class="muted">Data kosakata belum termuat. Pastikan folder <code>data/</code> ada.</p></div>';
       return;
     }
     var c = curCard();
@@ -551,7 +583,7 @@
       var dy = day();
       if (!dy.sessionDone.cards) { dy.sessionDone.cards = true; save(); }
       var more = newList(cardsOf(CS.decks)).length;
-      area.innerHTML = '<div class="celebrate"><div class="big">🎉</div><h2>Selesai untuk sekarang!</h2><p class="muted">' +
+      area.innerHTML = '<div class="celebrate">' + cheer("完成", "wánchéng", "selesai") + '<h2>Selesai untuk sekarang!</h2><p class="muted">' +
         (CS.done ? "Kamu mereview " + CS.done + " kartu. " : "Tidak ada kartu yang jatuh tempo. ") + 'Lanjutkan besok untuk menjaga streak.</p>' +
         (more ? '<button type="button" class="btn primary block" data-act="more-new">Belajar kartu baru tambahan (+10)</button>' : "") +
         '<a class="btn block" href="#/quiz" style="margin-top:10px">Ke kuis</a></div>';
@@ -734,7 +766,7 @@
     h += "</div>";
     if (answered) {
       var filled = String(q.q).replace("___", q.answer);
-      h += '<div class="feedback"><b>' + (chosen === q.answer ? "✅ Benar!" : "❌ Kurang tepat") + "</b> " + esc(q.explain || "") +
+      h += '<div class="feedback"><b>' + (chosen === q.answer ? okTag("Benar!") : noTag("Kurang tepat")) + "</b> " + esc(q.explain || "") +
         '<div class="row mt"><div class="grow ex-zh">' + esc(filled) + "</div>" + playBtn(filled) + "</div></div>";
     }
     return h;
@@ -761,7 +793,7 @@
       }).join("") + "</section>";
     }
     if (g.mistake) {
-      h += '<section class="panel mistake"><h2>Kesalahan umum</h2><p>❌ <span class="wrong ex-zh">' + esc(g.mistake.wrong) + '</span></p><p>✅ <span class="right ex-zh">' + esc(g.mistake.right) + "</span></p>" +
+      h += '<section class="panel mistake"><h2>Kesalahan umum</h2><p class="mk">' + I("x", "bad") + '<span class="wrong ex-zh">' + esc(g.mistake.wrong) + '</span></p><p class="mk">' + I("check", "good") + '<span class="right ex-zh">' + esc(g.mistake.right) + "</span></p>" +
         '<p class="muted small">' + esc(g.mistake.note || "") + "</p></section>";
     }
     var qs = arr(g.quiz);
@@ -803,7 +835,7 @@
     if (!MX) { go("#/grammar"); return; }
     var h = '<header class="screen-head"><a class="btn sm" href="#/grammar">‹ Keluar</a><span class="muted">Latihan campuran</span></header>';
     if (MX.i >= MX.items.length) {
-      h += '<div class="panel center stack"><div class="big" style="font-size:3rem">' + (MX.score >= MX.items.length * 0.8 ? "🎉" : "💪") + "</div><h2>Skor: " + MX.score + " / " + MX.items.length + "</h2>";
+      h += '<div class="panel center stack">' + (MX.score >= MX.items.length * 0.8 ? cheer("太棒了", "tài bàng le", "luar biasa") : cheer("加油", "jiāyóu", "semangat")) + "<h2>Skor: " + MX.score + " / " + MX.items.length + "</h2>";
       if (MX.miss.length) {
         h += '<div style="text-align:left"><b>Pola yang perlu diulang</b>' + MX.miss.map(function (id) {
           var g = gById(id);
@@ -854,9 +886,9 @@
     return '<div class="claude-panel stack" data-ctx="' + esc(ctx) + '">' +
       '<p>Pakai akun Claude-mu sendiri. Prompt di bawah berisi skenario ini + aturan koreksi. Claude akan memerankan ' + esc(role || "lawan bicaramu") + " dan mengoreksi setiap jawabanmu.</p>" +
       '<label class="check"><input type="checkbox" data-chg="claude-py" ' + (TK.claudePy ? "checked" : "") + "> Claude menulis pinyin</label>" +
-      '<div class="row wrap"><button type="button" class="btn primary" data-act="claude-open">📋 Salin prompt &amp; buka Claude</button>' +
-      '<button type="button" class="btn" data-act="claude-view">👀 Lihat prompt</button></div>' +
-      '<div class="tip small"><b>Tips menjawab:</b><br>• iPhone/iPad: tambah keyboard 中文(台灣)–拼音 atau 注音, lalu tekan 🎤 di keyboard untuk dikte.<br>• Windows: tekan <b>Win+H</b> untuk dikte suara (pilih bahasa Mandarin Taiwan).<br>• Ucapkan jawabanmu, jangan hanya mengetik.</div>' +
+      '<div class="row wrap"><button type="button" class="btn primary" data-act="claude-open">' + I("copy") + ' Salin prompt &amp; buka Claude</button>' +
+      '<button type="button" class="btn" data-act="claude-view">' + I("eye") + ' Lihat prompt</button></div>' +
+      '<div class="tip small"><b>' + I("bulb") + ' Tips menjawab:</b><br>• iPhone/iPad: tambah keyboard 中文(台灣)–拼音 atau 注音, lalu tekan ' + I("mic") + ' di keyboard untuk dikte.<br>• Windows: tekan <b>Win+H</b> untuk dikte suara (pilih bahasa Mandarin Taiwan).<br>• Ucapkan jawabanmu, jangan hanya mengetik.</div>' +
       '<div><h3>Impor kartu dari Claude</h3><p class="small muted">Di akhir sesi Claude memberi blok 【KARTU】. Tempel di sini (format: 中文 | pinyin | arti).</p>' +
       '<textarea class="imp" placeholder="【KARTU】&#10;我這邊沒問題 | wǒ zhèbiān méi wèntí | Dari sisi saya tidak ada masalah&#10;【/KARTU】" aria-label="Tempel kartu"></textarea>' +
       '<button type="button" class="btn soft mt" data-act="import-cards">Tambahkan ke dek \'Dari Claude\'</button></div></div>';
@@ -877,7 +909,7 @@
   ACT["ft-open"] = function (el) {
     var t = ftById(el.getAttribute("data-id"));
     if (!t) return;
-    openModal("<h2>" + esc(t.icon) + " " + esc(t.zh) + '</h2><p class="muted small">' + esc(t.name) + " — " + esc(t.goal_id) + "</p>" + claudePanel("ft:" + t.id, t.ai_role.split(",")[0]) +
+    openModal('<h2 class="zh">' + esc(t.zh) + '</h2><p class="muted small">' + esc(t.name) + " — " + esc(t.goal_id) + "</p>" + claudePanel("ft:" + t.id, t.ai_role.split(",")[0]) +
       '<div class="actions"><button type="button" class="btn" data-act="modal-close">Tutup</button></div>', { sheet: true });
   };
 
@@ -922,11 +954,11 @@
       var done = S.dialogues[d.id] && S.dialogues[d.id].done;
       var other = d.roles && d.roles[d.learner === "A" ? "B" : "A"];
       h += '<a class="d-card" href="#/talk/' + encodeURIComponent(d.id) + '"><div class="grow"><div class="zh">' + esc(d.title_zh) + '</div><div class="small muted">' + esc(d.title_id) +
-        (other ? " · dengan " + esc(other.id) : "") + '</div></div>' + (done ? '<span class="badge good">✅ selesai</span>' : "") + "<span aria-hidden=\"true\">›</span></a>";
+        (other ? " · dengan " + esc(other.id) : "") + '</div></div>' + (done ? '<span class="badge good">' + I("check") + ' selesai</span>' : "") + "<span aria-hidden=\"true\">›</span></a>";
     });
-    h += '</section><section class="panel"><h2>🤖 Free talk dengan Claude</h2><p class="small muted">Pilih topik, lalu ngobrol bebas dengan Claude memakai akunmu sendiri (perlu internet).</p><div class="chips">';
+    h += '</section><section class="panel"><h2>' + I("spark") + ' Free talk dengan Claude</h2><p class="small muted">Pilih topik, lalu ngobrol bebas dengan Claude memakai akunmu sendiri (perlu internet).</p><div class="ft-grid">';
     arr(W.FREE_TALK_TOPICS).forEach(function (t) {
-      h += '<button type="button" class="chip" data-act="ft-open" data-id="' + esc(t.id) + '">' + esc(t.icon) + " " + esc(t.zh) + "</button>";
+      h += '<button type="button" class="ft-item" data-act="ft-open" data-id="' + esc(t.id) + '"><span class="zh">' + esc(t.zh) + '</span><span class="small muted">' + esc(t.name) + "</span></button>";
     });
     h += "</div></section></div>";
     view(h);
@@ -959,14 +991,14 @@
     info += "</details>";
 
     var h = '<header class="screen-head"><div><a class="btn sm" href="#/talk">‹ Bicara</a></div></header>';
-    h += '<div class="mb"><h1 class="zh" style="font-size:1.6rem">' + esc(d.title_zh) + '</h1><div class="muted">' + esc(d.title_id) + (d.title_en ? " · " + esc(d.title_en) : "") + "</div></div>";
-    h += '<div class="seg mb" role="tablist" aria-label="Mode latihan">' + [["read", "📖 Dengar &amp; Baca"], ["role", "🎭 Roleplay"], ["shadow", "🔁 Shadowing"], ["claude", "🤖 Claude"]].map(function (x) {
+    h += '<div class="mb"><h1 class="zh" style="font-size:1.6rem">' + esc(d.title_zh) + '</h1><div class="muted">' + esc(d.title_id) + "" + "</div></div>";
+    h += '<div class="seg tabs mb" role="tablist" aria-label="Mode latihan">' + [["read", I("head") + "<span>Dengar</span>"], ["role", I("users") + "<span>Roleplay</span>"], ["shadow", I("repeat") + "<span>Shadowing</span>"], ["claude", I("spark") + "<span>Claude</span>"]].map(function (x) {
       return '<button type="button" role="tab" class="' + (TK.mode === x[0] ? "on" : "") + '" data-act="tmode" data-v="' + x[0] + '">' + x[1] + "</button>";
     }).join("") + "</div>";
     var main;
     if (TK.mode === "role") main = roleHtml(d);
     else if (TK.mode === "shadow") main = shadowHtml(d);
-    else if (TK.mode === "claude") main = '<section class="panel"><h2>🤖 Latihan dengan Claude</h2>' + claudePanel("dl:" + d.id, (d.ai_role || "").split(",")[0]) + "</section>";
+    else if (TK.mode === "claude") main = '<section class="panel"><h2>' + I("spark") + ' Latihan dengan Claude</h2>' + claudePanel("dl:" + d.id, (d.ai_role || "").split(",")[0]) + "</section>";
     else main = readHtml(d);
     // info (situasi & target) duluan di DOM: di HP/iPad portrait tampil di atas; di layar lebar dipindah ke kolom kanan lewat grid
     h += '<div class="two-col">' + info + '<div class="main stack">' + main + "</div></div>";
@@ -1027,16 +1059,15 @@
 
   /* ---- a) read & listen ---- */
   function readHtml(d) {
-    var h = '<section class="panel stack"><div class="row between wrap">' + toggleChips() + rateSeg() + "</div>" +
-      '<button type="button" class="btn primary" id="playall" data-act="play-all">▶ Putar semua</button></section>';
+    var h = '<div class="toolbar"><button type="button" class="btn primary" id="playall" data-act="play-all">' + playAllLabel() + "</button>" + toggleChips() + rateSeg() + "</div>";
     h += '<div class="bubbles' + flagsClass() + '">' + arr(d.lines).map(function (l, i) { return bubbleHtml(d, l, i); }).join("") + "</div>";
     return h;
   }
   ACT["play-all"] = function () {
     var d = dlById(TK.id), btn = $("#playall");
     if (!d) return;
-    if (PLAYING) { TTS.stop(); PLAYING = false; if (btn) btn.textContent = "▶ Putar semua"; $$(".bubble.playing").forEach(function (b) { b.classList.remove("playing"); }); return; }
-    PLAYING = true; if (btn) btn.textContent = "■ Stop";
+    if (PLAYING) { TTS.stop(); PLAYING = false; if (btn) btn.innerHTML = playAllLabel(); $$(".bubble.playing").forEach(function (b) { b.classList.remove("playing"); }); return; }
+    PLAYING = true; if (btn) btn.innerHTML = I("stop", "fill") + " Stop";
     TTS.speakSeq(arr(d.lines).map(function (l) { return l.zh; }), {
       rate: TK.rate, gapMs: 450,
       onItem: function (i) {
@@ -1045,7 +1076,7 @@
         if (b) { b.classList.add("playing"); try { b.scrollIntoView({ block: "center", behavior: "smooth" }); } catch (e) {} }
       },
       onDone: function () {
-        PLAYING = false; var bt = $("#playall"); if (bt) bt.textContent = "▶ Putar semua";
+        PLAYING = false; var bt = $("#playall"); if (bt) bt.innerHTML = playAllLabel();
         $$(".bubble.playing").forEach(function (b) { b.classList.remove("playing"); });
       }
     });
@@ -1095,7 +1126,7 @@
         return '<div class="row"><div class="grow"><span class="zh">' + esc(a.zh) + '</span><div class="small muted">' + esc(a.py || "") + "</div></div>" + playBtn(a.zh, "sm") + "</div>";
       }).join("") + "</div>";
     }
-    if (line.note) h += '<div class="tip small">💡 ' + esc(line.note) + "</div>";
+    if (line.note) h += '<div class="tip small">' + I("bulb") + " " + esc(line.note) + "</div>";
     if (!easy && text) {
       var sc = similarity(text, line);
       h += '<div><span class="score-pill">' + sc + '% — ' + (sc >= 80 ? "Mantap" : sc >= 50 ? "Hampir" : "Coba lagi") + '</span> <button type="button" class="btn sm" data-act="rp-again">Ulangi</button></div>';
@@ -1109,9 +1140,9 @@
     h += '<div class="bubbles' + flagsClass() + '">' + RP.shown.map(function (i) { return bubbleHtml(d, lines[i], i); }).join("") + "</div>";
     if (RP.done) {
       var turns = learnerTurns(d).length, good = Object.keys(RP.marks).filter(function (k) { return RP.marks[k]; }).length;
-      return h + '<section class="panel center stack"><div style="font-size:3rem">' + (good === turns ? "🎉" : "👏") + "</div><h2>Roleplay selesai</h2><p>Kamu menandai <b>" + good + " / " + turns +
+      return h + '<section class="panel center stack">' + (good === turns ? cheer("很好", "hěn hǎo", "bagus sekali") : cheer("加油", "jiāyóu", "semangat")) + "<h2>Roleplay selesai</h2><p>Kamu menandai <b>" + good + " / " + turns +
         "</b> giliran sebagai bisa.</p><p class=\"small muted\">Ulangi sampai lancar, atau lanjut latihan bebas dengan Claude.</p>" +
-        '<button type="button" class="btn primary block" data-act="tmode" data-v="claude">🤖 Latihan dengan Claude</button>' +
+        '<button type="button" class="btn primary block" data-act="tmode" data-v="claude">' + I("spark") + ' Latihan dengan Claude</button>' +
         '<button type="button" class="btn block" data-act="rp-restart">↺ Ulangi roleplay</button><a class="btn block" href="#/talk">Pilih skenario lain</a></section>';
     }
     var c = RP.cur, line = lines[c.idx];
@@ -1129,10 +1160,10 @@
         var ok = c.opts[c.picked] === line.zh;
         h += '<div class="opts">' + c.opts.map(function (o, i) {
           return '<div class="opt ' + (o === line.zh ? "correct" : i === c.picked ? "wrong" : "") + '">' + esc(o) + "</div>";
-        }).join("") + '</div><div class="feedback"><b>' + (ok ? "✅ Tepat!" : "❌ Bukan itu.") + "</b> " + (ok ? "" : "Jawaban yang natural ada di bawah.") + "</div>";
+        }).join("") + '</div><div class="feedback"><b>' + (ok ? okTag("Tepat!") : noTag("Bukan itu.")) + "</b> " + (ok ? "" : "Jawaban yang natural ada di bawah.") + "</div>";
       }
       h += answerCard(line, c.text, c.easy);
-      h += '<div class="row wrap"><span class="muted small grow">Bagaimana tadi?</span><button type="button" class="btn" data-act="rp-mark" data-ok="0">🔁 Belum</button><button type="button" class="btn primary" data-act="rp-mark" data-ok="1">✅ Bisa</button></div>';
+      h += '<div class="row wrap"><span class="muted small grow">Bagaimana tadi?</span><button type="button" class="btn" data-act="rp-mark" data-ok="0">' + I("repeat") + ' Belum</button><button type="button" class="btn primary" data-act="rp-mark" data-ok="1">' + I("check") + ' Bisa</button></div>';
     }
     return h + "</section>";
   }
@@ -1182,9 +1213,9 @@
       (TK.py ? '<div class="center muted">' + esc(l.py || "") + "</div>" : "") +
       (TK.tr ? '<div class="center small">' + esc(l.id || "") + "</div>" : "") +
       '<div class="countbar" aria-hidden="true"><i id="cbar"></i></div>' +
-      '<div class="row wrap" style="justify-content:center"><button type="button" class="btn primary" data-act="sh-listen">▶ Dengar</button><button type="button" class="btn soft" data-act="sh-turn">🎙️ Giliranku</button></div>' +
+      '<div class="row wrap" style="justify-content:center"><button type="button" class="btn primary" data-act="sh-listen">' + I("play", "fill") + ' Dengar</button><button type="button" class="btn soft" data-act="sh-turn">' + I("mic") + ' Giliranku</button></div>' +
       '<div class="row between"><button type="button" class="btn" data-act="sh-prev"' + (SH.i ? "" : " disabled") + '>‹ Sebelumnya</button>' +
-      '<button type="button" class="chip ' + (SH.auto ? "on" : "") + '" data-act="sh-auto">' + (SH.auto ? "■ Otomatis" : "↻ Otomatis") + '</button>' +
+      '<button type="button" class="chip ' + (SH.auto ? "on" : "") + '" data-act="sh-auto">' + (SH.auto ? I("stop", "fill") + " Otomatis" : I("repeat") + " Otomatis") + '</button>' +
       '<button type="button" class="btn" data-act="sh-next"' + (SH.i < lines.length - 1 ? "" : " disabled") + ">Berikutnya ›</button></div>";
   }
   function shDrawCur() { shDraw(); }
@@ -1250,9 +1281,9 @@
     var chips = '<button type="button" class="chip ' + (!QZ.decks.length ? "on" : "") + '" data-act="qz-deck" data-d="all">Semua</button>';
     DECKS.forEach(function (d) {
       if (!CARDS.some(function (c) { return c.deck === d.id; })) return;
-      chips += '<button type="button" class="chip ' + (QZ.decks.indexOf(d.id) >= 0 ? "on" : "") + '" data-act="qz-deck" data-d="' + esc(d.id) + '">' + esc(d.icon) + " " + esc(d.name) + "</button>";
+      chips += '<button type="button" class="chip ' + (QZ.decks.indexOf(d.id) >= 0 ? "on" : "") + '" data-act="qz-deck" data-d="' + esc(d.id) + '">' + deckMark(d) + esc(d.name) + "</button>";
     });
-    h += '<div class="stack"><section class="panel"><h2>Dek</h2><div class="chips">' + chips + "</div></section>";
+    h += '<div class="stack"><section class="panel"><h2>Dek</h2><div class="chips scroll-x">' + chips + "</div></section>";
     h += '<section class="panel"><h2>Jenis soal</h2><div class="seg">' + [["meaning", "Arti"], ["hanzi", "Hanzi"], ["listen", "Dengar"], ["mix", "Campur"]].map(function (x) {
       return '<button type="button" class="' + (QZ.type === x[0] ? "on" : "") + '" data-act="qz-type" data-v="' + x[0] + '">' + x[1] + "</button>";
     }).join("") + '</div><h2 class="mt">Jumlah soal</h2><div class="seg" style="max-width:240px">' + [10, 20].map(function (n) {
@@ -1282,7 +1313,7 @@
     var h = '<header class="screen-head"><button type="button" class="btn sm" data-act="qz-quit">‹ Keluar</button><span class="muted">Kuis</span></header>';
     if (QZ.i >= QZ.qs.length) {
       var n = QZ.qs.length;
-      h += '<div class="stack"><section class="panel center"><div style="font-size:3rem">' + (QZ.score >= n * 0.8 ? "🎉" : QZ.score >= n * 0.5 ? "👍" : "💪") + "</div><h2>Skor " + QZ.score + " / " + n + "</h2><p class=\"muted\">" + pct(QZ.score, n) + "% benar</p></section>";
+      h += '<div class="stack"><section class="panel center">' + (QZ.score >= n * 0.8 ? cheer("太棒了", "tài bàng le", "luar biasa") : QZ.score >= n * 0.5 ? cheer("不錯", "búcuò", "lumayan") : cheer("加油", "jiāyóu", "semangat")) + "<h2>Skor " + QZ.score + " / " + n + "</h2><p class=\"muted\">" + pct(QZ.score, n) + "% benar</p></section>";
       if (QZ.misses.length) {
         h += '<section class="panel"><h2>Yang masih salah</h2>' + QZ.misses.map(function (k) {
           var c = CARD[k];
@@ -1298,7 +1329,7 @@
     h += '<section class="panel mt"><div class="quiz-q">';
     if (q.t === "meaning") h += '<div class="big-hanzi">' + tcolor(c.zh, c.py) + "</div>" + (S.settings.showPinyin && c.py ? '<div class="muted">' + esc(c.py) + "</div>" : "") + '<div class="muted small mt">Apa artinya?</div>';
     else if (q.t === "hanzi") h += '<div class="front-mean">' + esc(c.id_meaning) + '</div><div class="muted small mt">Pilih kata Mandarin yang tepat</div>';
-    else h += '<button type="button" class="listen-btn" data-act="speak" data-t="' + esc(c.zh) + '" aria-label="Putar audio">🔊</button><div class="muted small mt">Dengar, lalu pilih artinya</div>';
+    else h += '<button type="button" class="listen-btn" data-act="speak" data-t="' + esc(c.zh) + '" aria-label="Putar audio">' + I("vol") + '</button><div class="muted small mt">Dengar, lalu pilih artinya</div>';
     h += '</div><div class="opts">';
     q.opts.forEach(function (o, i) {
       var cls = "opt";
@@ -1308,7 +1339,7 @@
     h += "</div>";
     if (QZ.chosen != null) {
       var ok = q.opts[QZ.chosen].key === q.key;
-      h += '<div class="feedback"><div class="row"><div class="grow"><b>' + (ok ? "✅ Benar!" : "❌ Kurang tepat") + '</b><div class="ex-zh" style="font-size:1.3rem">' + tcolor(c.zh, c.py) + '</div><div class="muted small">' + esc(c.py || "") +
+      h += '<div class="feedback"><div class="row"><div class="grow"><b>' + (ok ? okTag("Benar!") : noTag("Kurang tepat")) + '</b><div class="ex-zh" style="font-size:1.3rem">' + tcolor(c.zh, c.py) + '</div><div class="muted small">' + esc(c.py || "") +
         "</div><div>" + esc(c.id_meaning || "") + "</div></div>" + playBtn(c.zh) + '</div></div><button type="button" class="btn primary block mt" data-act="qz-next">' + (QZ.i + 1 >= QZ.qs.length ? "Lihat skor" : "Lanjut") + "</button>";
     }
     h += "</section>";
@@ -1359,13 +1390,13 @@
     h += '<section class="panel"><h2>Tema</h2>' + segHtml("theme", ["auto", "light", "dark"], ["Otomatis", "Terang", "Gelap"], S.settings.theme) + "</section>";
     h += '<section class="panel"><h2>Kartu baru per hari</h2>' + segHtml("newPerDay", [5, 10, 15, 20, 30], [5, 10, 15, 20, 30], S.settings.newPerDay) + "</section>";
     h += '<section class="panel"><h2>Audio</h2><p class="small muted">Kecepatan bicara</p>' + segHtml("rate", [0.6, 0.7, 0.85, 1, 1.2], ["0.6×", "0.7×", "0.85×", "1×", "1.2×"], S.settings.rate) +
-      '<div class="row wrap mt"><button type="button" class="btn soft" data-act="test-voice">🔊 Tes suara</button><span class="small muted">' +
+      '<div class="row wrap mt"><button type="button" class="btn soft" data-act="test-voice">' + I("vol") + ' Tes suara</button><span class="small muted">' +
       (st === "none" ? "Tidak ada suara Mandarin terdeteksi" : "Suara: " + esc(TTS.voiceName())) + "</span></div>" + (st !== "tw" ? '<div class="mt">' + ttsHelpHtml().replace('class="panel tip warn"', 'class="tip warn"') + "</div>" : "") + "</section>";
     h += '<section class="panel"><h2>Kartu dari Claude (' + S.custom.length + ")</h2>";
     if (!S.custom.length) h += '<p class="small muted">Belum ada. Impor lewat tab Bicara → Claude.</p>';
     S.custom.forEach(function (c) {
       h += '<div class="deck-row"><div class="grow"><div class="zh" style="font-size:1.15rem">' + esc(c.zh) + '</div><div class="small muted">' + esc(c.py || "") + " " + esc(c.id_meaning || "") + '</div></div>' +
-        '<button type="button" class="icon-btn" data-act="cc-del" data-id="' + esc(c.id) + '" aria-label="Hapus kartu">🗑️</button></div>';
+        '<button type="button" class="icon-btn" data-act="cc-del" data-id="' + esc(c.id) + '" aria-label="Hapus kartu">' + I("trash") + "</button></div>";
     });
     h += "</section>";
     h += transferHtml();
