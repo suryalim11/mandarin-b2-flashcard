@@ -1,5 +1,5 @@
-/* Service worker: precache app shell + data, cache-first. Bump CACHE to ship updates. */
-const CACHE = "mb2-v5";
+/* Service worker: precache app shell + data, stale-while-revalidate. Bump CACHE to ship updates (banner "Versi baru tersedia"). */
+const CACHE = "mb2-v6";
 const CORE = ["./", "./index.html", "./manifest.webmanifest", "./css/style.css", "./fonts/plus-jakarta-sans-latin-wght-normal.woff2",
   "./js/pinyin.js", "./js/srs.js", "./js/tts.js", "./js/app.js",
   "./icons/icon-192.png", "./icons/icon-512.png", "./icons/icon-maskable-512.png", "./icons/apple-touch-icon.png", "./icons/qr-app.svg", "./icons/qr-app.png"];
@@ -28,23 +28,23 @@ self.addEventListener("fetch", (event) => {
   if (req.method !== "GET") return;
   const url = new URL(req.url);
   if (url.origin !== self.location.origin) return;
+  // stale-while-revalidate: jawab dari cache (cepat, offline jalan), lalu perbarui cache dari jaringan
+  // di belakang layar. File yang sempat tersimpan basi (CDN belum sinkron saat deploy) pulih di pembukaan berikutnya.
   event.respondWith((async () => {
-    const cached = await caches.match(req, { ignoreSearch: true });
-    if (cached) return cached;
-    try {
-      const res = await fetch(req);
-      if (res && res.ok && res.type === "basic") {
-        const copy = res.clone();
-        caches.open(CACHE).then((c) => c.put(req, copy)).catch(() => {});
-      }
+    const cache = await caches.open(CACHE);
+    const cached = await cache.match(req, { ignoreSearch: true });
+    const network = fetch(req, { cache: "no-cache" }).then((res) => {
+      if (res && res.ok && res.type === "basic") cache.put(req, res.clone()).catch(() => {});
       return res;
-    } catch (err) {
-      if (req.mode === "navigate") {
-        const fallback = await caches.match("./index.html");
-        if (fallback) return fallback;
-      }
-      return new Response("Offline", { status: 503, statusText: "Offline" });
+    }).catch(() => null);
+    if (cached) { event.waitUntil(network); return cached; }
+    const res = await network;
+    if (res) return res;
+    if (req.mode === "navigate") {
+      const fallback = await cache.match("./index.html");
+      if (fallback) return fallback;
     }
+    return new Response("Offline", { status: 503, statusText: "Offline" });
   })());
 });
 
