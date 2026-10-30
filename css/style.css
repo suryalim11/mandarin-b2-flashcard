@@ -109,6 +109,12 @@ mark { background: var(--warn-soft); color: inherit; border-radius: 4px; padding
 .btn.block { width: 100%; }
 .btn.lg { min-height: 54px; font-size: 1.05rem; font-weight: 700; border-radius: 14px; }
 .today .stat-line { margin: 12px 0 0; }
+.reveal-wrap { max-width: 560px; margin: 14px auto 0; }
+.swipe-hint { margin: 10px 0 0; }
+.kbd-hint { display: none; font: 600 .72rem/1 var(--font); padding: 3px 6px; margin-left: 8px; border-radius: 6px; background: rgba(255,255,255,.18); border: 1px solid rgba(255,255,255,.35); }
+@media (hover: hover) and (pointer: fine) { .kbd-hint { display: inline-block; } }
+@media (hover: none) { .swipe-hint { display: block; } }
+@media (hover: hover) and (pointer: fine) { .swipe-hint { display: none !important; } }
 .today .stat-line b { color: var(--text); }
 .btn[disabled] { opacity: .5; }
 .icon-btn {

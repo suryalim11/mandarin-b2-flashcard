@@ -549,7 +549,8 @@
     var h = '<div class="progress-line"><span>' + CS.done + " / " + (CS.done + CS.queue.length) + '</span><div class="bar"><i style="width:' + pct(CS.done, CS.done + CS.queue.length) + '%"></i></div>' +
       '<span>' + (st ? "review" : "baru") + "</span></div>";
     h += '<div class="cardwrap" id="cardwrap"><div class="card" id="card" role="button" tabindex="0" aria-label="Balik kartu">' + cardFront(c) + cardBack(c) + "</div></div>";
-    h += '<div class="center hint mt" id="flip-hint">Ketuk kartu atau tekan Spasi untuk membalik · geser kiri = Lagi, kanan = Bisa</div>';
+    h += '<div class="reveal-wrap" id="flip-hint"><button type="button" class="btn primary block lg" data-act="reveal">Lihat jawaban <kbd class="kbd-hint">Spasi</kbd></button></div>';
+    h += '<p class="center small muted swipe-hint" id="swipe-hint" hidden>Geser kartu: kiri = Lagi · kanan = Bisa</p>';
     h += '<div class="rate-bar" id="ratebar" hidden>' + [["Lagi", 0], ["Sulit", 1], ["Bisa", 2], ["Mudah", 3]].map(function (x) {
       return '<button type="button" class="r' + x[1] + '" data-act="rate" data-g="' + x[1] + '" aria-label="' + x[0] + '">' + x[0] + "<small>" + SRS.nextIntervalLabel(st, x[1]) + "</small></button>";
     }).join("") + "</div>";
@@ -575,6 +576,7 @@
     }
     if (rb) rb.hidden = !CS.flipped;
     var fh = $("#flip-hint"); if (fh) fh.hidden = CS.flipped;
+    var sw = $("#swipe-hint"); if (sw) sw.hidden = !CS.flipped;
     var f = $(".face.front", card), b = $(".face.back", card);
     if (f) f.setAttribute("aria-hidden", CS.flipped ? "true" : "false");
     if (b) b.setAttribute("aria-hidden", CS.flipped ? "false" : "true");
@@ -644,6 +646,7 @@
     drawCard();
   }
   ACT.rate = function (el) { if (CS.flipped) rateCurrent(+el.getAttribute("data-g")); };
+  ACT.reveal = function () { if (!CS.flipped) { CS.tapped = true; flip(); } };
   function cardsKey(e) {
     var k = e.key;
     if (k === " " || k === "Spacebar") { if (curCard()) { e.preventDefault(); flip(); } return; }
