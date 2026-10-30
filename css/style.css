@@ -91,6 +91,7 @@ mark { background: var(--warn-soft); color: inherit; border-radius: 4px; padding
 .panel h3 { font-size: .95rem; margin-bottom: 6px; }
 .tip { background: var(--brand-soft); border-radius: 12px; padding: 12px 14px; font-size: .92rem; }
 .tip.warn { background: var(--warn-soft); }
+details.tip > summary { cursor: pointer; padding: 4px 0; }
 .row { display: flex; align-items: center; gap: 10px; }
 .row.wrap { flex-wrap: wrap; }
 .row.between { justify-content: space-between; }

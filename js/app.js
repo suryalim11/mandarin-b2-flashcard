@@ -280,10 +280,11 @@
   W.addEventListener("appinstalled", function () { deferredPrompt = null; if (CUR.name === "home") rerender(); });
 
   function ttsHelpHtml() {
-    return '<div class="panel tip warn"><h3>🔈 Suara Mandarin Taiwan belum terpasang</h3>' +
-      "<p class=\"small\">Audio tetap jalan, tapi aksen mungkin bukan Taiwan" + (TTS.status() === "none" ? " (atau tidak ada suara Mandarin sama sekali)" : "") + ".</p>" +
-      '<p class="small"><b>Windows:</b> Settings → Time &amp; language → Language &amp; region → tambah 中文(台灣) lalu pasang paket Speech.<br>' +
-      "<b>iPhone/iPad:</b> Settings → Accessibility → Spoken Content → Voices → Chinese (Taiwan) → unduh Meijia.</p></div>";
+    // ringkas: satu baris, instruksi hanya untuk platform yang sedang dipakai
+    var how = isIOS() ? "Settings → Accessibility → Spoken Content → Voices → Chinese (Taiwan) → unduh Meijia."
+      : "Settings → Time &amp; language → Language &amp; region → tambah 中文(台灣) lalu pasang paket Speech.";
+    return '<details class="panel tip warn"><summary><b>🔈 ' + (TTS.status() === "none" ? "Suara Mandarin belum terpasang" : "Suara Mandarin Taiwan belum terpasang") +
+      '</b> <span class="small muted">· cara pasang</span></summary><p class="small mt">' + how + "</p></details>";
   }
   TTS.onChange(function () { if (CUR.name === "home" || CUR.name === "settings") rerender(); });
 
@@ -334,8 +335,12 @@
       h += '<section class="panel tip row between"><span><b>📲 Pasang aplikasi</b><br><span class="small">Pakai offline dari desktop / layar utama.</span></span><button class="btn primary" data-act="install">Install app</button></section>';
     }
     if (TTS.status() !== "tw") h += ttsHelpHtml();
-
-    h += '<section class="panel"><h2>Pindah progres antar-perangkat</h2>' +
+    h += "</div>";
+    view(h);
+  };
+  // jarang dipakai → tinggal di Pengaturan, bukan di Beranda
+  function transferHtml() {
+    return '<section class="panel"><h2>Pindah progres antar-perangkat</h2>' +
       '<p class="small muted">Progres tersimpan di perangkat ini saja. Salin kode (atau unduh file) lalu impor di perangkat lain.</p>' +
       '<div class="row wrap"><button class="btn soft" data-act="xfer-copy">📋 Salin kode progres</button><button class="btn" data-act="xfer-download">⬇️ Unduh file .json</button></div>' +
       '<textarea id="code-out" class="mono mt" readonly hidden aria-label="Kode progres"></textarea>' +
@@ -343,9 +348,7 @@
       '<textarea id="code-in" class="mono" placeholder="MB2G:… atau MB2P:…"></textarea>' +
       '<div class="row wrap mt"><button class="btn primary" data-act="xfer-import">Impor</button>' +
       '<label class="btn" style="cursor:pointer">⬆️ Unggah file<input type="file" accept=".json,application/json,text/plain" data-chg="xfer-file" hidden></label></div></section>';
-    h += "</div>";
-    view(h);
-  };
+  }
   ACT["home-cards"] = function () { CS.decks = []; CS.fresh = true; go("#/cards"); };
   ACT["home-talk"] = function (el) { var id = el.getAttribute("data-id"); go(id ? "#/talk/" + encodeURIComponent(id) : "#/talk"); };
   ACT["home-phr"] = function () { CS.decks = ["phrases"]; CS.dir = "id2zh"; CS.fresh = true; go("#/cards"); };
@@ -1357,7 +1360,8 @@
         '<button type="button" class="icon-btn" data-act="cc-del" data-id="' + esc(c.id) + '" aria-label="Hapus kartu">🗑️</button></div>';
     });
     h += "</section>";
-    h += '<section class="panel"><h2>Data</h2><p class="small muted">Progres tersimpan di perangkat ini. Untuk memindahkan, pakai bagian "Pindah progres" di Beranda.</p><button type="button" class="btn danger" data-act="reset-all">Reset semua progres</button></section>';
+    h += transferHtml();
+    h += '<section class="panel"><h2>Data</h2><button type="button" class="btn danger" data-act="reset-all">Reset semua progres</button></section>';
     h += '<p class="center muted small">華語 B2 Flashcard v' + VERSION + " · " + CARDS.length + " kartu · " + grammarList().length + " pola · " + arr(W.DIALOGUES).length + " dialog</p></div>";
     view(h);
   };
