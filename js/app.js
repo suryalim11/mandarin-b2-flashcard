@@ -2,7 +2,7 @@
 (function () {
   "use strict";
   var W = window, D = document;
-  var VERSION = "1.1.0";
+  var VERSION = "1.2.0";
   var KEY = "mb2.v1";
 
   /* =========================================================
@@ -329,7 +329,8 @@
     try { dateStr = new Date().toLocaleDateString("id-ID", { weekday: "long", day: "numeric", month: "long" }); } catch (e) { dateStr = t; }
     var dl = suggestDialogue();
     var sd = dy.sessionDone;
-    var h = head("華語 B2", esc(dateStr) + " &nbsp;·&nbsp; " + I("flame", "flame") + " " + streakNow() + " hari");
+    var h = head("華語 B2", esc(dateStr) + " &nbsp;·&nbsp; " + I("flame", "flame") + " " + streakNow() + " hari",
+      '<div class="head-actions"><a class="icon-btn head-nav" href="#/share" aria-label="Bagikan app">' + I("share") + '</a><a class="icon-btn head-nav" href="#/settings" aria-label="Pengaturan">' + ICON_GEAR + "</a></div>");
     h += '<div class="stack">';
 
     function step(n, done, label, sub, act, extra) {
@@ -1382,10 +1383,44 @@
   function switchRow(key, label) {
     return '<label class="switch-row"><span>' + label + '</span><input type="checkbox" data-chg="set-bool" data-k="' + key + '" ' + (S.settings[key] ? "checked" : "") + "></label>";
   }
+  /* =========================================================
+   * Bagikan: QR statis (icons/qr-app.svg, tetap tampil offline) + link + cara pasang
+   * ========================================================= */
+  var APP_URL = "https://suryalim11.github.io/mandarin-b2-flashcard/";
+  var SHARE_MSG = "Ini app flash card Mandarin TOCFL B2 untuk latihan kosakata kerja + percakapan:\n" + APP_URL +
+    "\niPhone/iPad: buka di Safari → Share → \"Add to Home Screen\". Android: Chrome → ⋮ → Install app. Windows: Chrome/Edge → klik Install." +
+    "\nSetelah dibuka sekali, app bisa dipakai offline.";
+  SCREENS.share = function () {
+    var h = head("Bagikan", "Scan QR atau kirim link ke teman belajar", "");
+    h += '<div class="stack"><section class="panel share-hero">' +
+      '<div class="qr-box"><img src="icons/qr-app.svg" width="232" height="232" alt="QR code menuju ' + esc(APP_URL) + '"></div>' +
+      '<p class="share-url">' + esc(APP_URL.replace(/^https:\/\//, "").replace(/\/$/, "")) + "</p>" +
+      '<div class="share-actions">' +
+      (navigator.share ? '<button type="button" class="btn primary" data-act="share-native">' + I("share") + " Bagikan…</button>" : "") +
+      '<button type="button" class="btn' + (navigator.share ? "" : " primary") + '" data-act="share-copy">' + I("copy") + " Salin link</button>" +
+      '<a class="btn" href="icons/qr-app.png" download="qr-hua-yu-b2.png">' + I("down") + " Unduh QR</a></div></section>";
+    h += '<section class="panel"><h2>Pesan siap kirim</h2><p class="share-msg">' + esc(SHARE_MSG).replace(/\n/g, "<br>") + "</p>" +
+      '<button type="button" class="btn soft" data-act="share-copy-msg">' + I("copy") + " Salin pesan</button></section>";
+    function stepRow(dev, how) { return '<li><b>' + dev + '</b><span class="muted">' + how + "</span></li>"; }
+    h += '<section class="panel"><h2>Cara pasang</h2><ol class="install-steps">' +
+      stepRow("iPhone / iPad", "Buka link di <b>Safari</b> → " + I("share") + " Share → <b>Add to Home Screen</b>") +
+      stepRow("Android", "Buka di Chrome → menu ⋮ → <b>Install app</b>") +
+      stepRow("Windows", "Buka di Chrome atau Edge → ikon <b>Install</b> di address bar") +
+      '</ol><p class="small muted mt">Setelah dibuka sekali, app jalan offline. Progres tersimpan per perangkat; pindahkan lewat <a href="#/settings">Pengaturan → Pindah progres</a>.</p></section></div>';
+    view(h);
+  };
+  ACT["share-copy"] = function () { copyText(APP_URL).then(function (ok) { toast(ok ? "Link disalin" : "Gagal menyalin, tahan lama link untuk menyalin"); }); };
+  ACT["share-copy-msg"] = function () { copyText(SHARE_MSG).then(function (ok) { toast(ok ? "Pesan disalin, tinggal tempel di WhatsApp" : "Gagal menyalin"); }); };
+  ACT["share-native"] = function () {
+    if (!navigator.share) return ACT["share-copy"]();
+    navigator.share({ title: "華語 B2 Flashcard", text: "Flash card Mandarin TOCFL B2 untuk kerja + latihan percakapan", url: APP_URL }).catch(function () {});
+  };
+
   SCREENS.settings = function () {
     var st = TTS.status();
     var h = head("Pengaturan", "Versi " + VERSION, '<a class="icon-btn head-nav" href="#/home" aria-label="Beranda">' + ICON_HOME + "</a>");
-    h += '<div class="stack"><section class="panel"><h2>Tampilan kartu</h2>' + switchRow("showPinyin", "Tampilkan pinyin") + switchRow("showEnglish", "Tampilkan English") + switchRow("toneColors", "Warna nada") +
+    h += '<div class="stack"><a class="panel share-link" href="#/share">' + I("share") + '<span class="grow"><b>Bagikan app</b><br><span class="small muted">QR code, link, dan cara pasang</span></span><span class="chev" aria-hidden="true">›</span></a>';
+    h += '<section class="panel"><h2>Tampilan kartu</h2>' + switchRow("showPinyin", "Tampilkan pinyin") + switchRow("showEnglish", "Tampilkan English") + switchRow("toneColors", "Warna nada") +
       '<p class="small mt"><span class="zh"><span class="t1">妈</span> <span class="t2">麻</span> <span class="t3">馬</span> <span class="t4">罵</span> <span class="t5">嗎</span></span> nada 1–4 &amp; netral</p></section>';
     h += '<section class="panel"><h2>Tema</h2>' + segHtml("theme", ["auto", "light", "dark"], ["Otomatis", "Terang", "Gelap"], S.settings.theme) + "</section>";
     h += '<section class="panel"><h2>Kartu baru per hari</h2>' + segHtml("newPerDay", [5, 10, 15, 20, 30], [5, 10, 15, 20, 30], S.settings.newPerDay) + "</section>";

@@ -1,8 +1,8 @@
 /* Service worker: precache app shell + data, cache-first. Bump CACHE to ship updates. */
-const CACHE = "mb2-v3";
+const CACHE = "mb2-v4";
 const CORE = ["./", "./index.html", "./manifest.webmanifest", "./css/style.css", "./fonts/plus-jakarta-sans-latin-wght-normal.woff2",
   "./js/pinyin.js", "./js/srs.js", "./js/tts.js", "./js/app.js",
-  "./icons/icon-192.png", "./icons/icon-512.png", "./icons/icon-maskable-512.png", "./icons/apple-touch-icon.png"];
+  "./icons/icon-192.png", "./icons/icon-512.png", "./icons/icon-maskable-512.png", "./icons/apple-touch-icon.png", "./icons/qr-app.svg", "./icons/qr-app.png"];
 const DATA = ["./data/decks.js", "./data/vocab-a.js", "./data/vocab-b.js", "./data/phrases.js", "./data/grammar.js",
   "./data/dialogues-a.js", "./data/dialogues-b.js", "./data/prompts.js"];
 

@@ -407,3 +407,25 @@ h1, h2 { text-wrap: balance; }
 /* bar nilai sticky: latar penutup supaya isi kartu tidak tembus di sela tombol */
 .rate-bar { padding: 8px 0; background: var(--bg); box-shadow: 0 -12px 14px -6px var(--bg); }
 @media (max-width: 559px) { .toolbar .btn.primary { flex: 1 1 100%; } .toolbar .seg { min-width: 140px; } }
+
+/* ---------- Bagikan ---------- */
+#nav .nav-extra { display: none; }
+@media (min-width: 768px) {
+  #nav .nav-extra { display: flex; margin-top: auto; }
+  #nav .nav-extra + .nav-settings { margin-top: 0; }
+}
+.head-actions { display: flex; gap: 8px; }
+.share-hero { text-align: center; padding: 22px 16px; }
+.qr-box { display: inline-block; padding: 14px; background: #fff; border-radius: 18px; border: 1px solid var(--border); box-shadow: var(--shadow); }
+.qr-box img { display: block; width: min(232px, 62vw); height: auto; image-rendering: pixelated; }
+.share-url { margin: 14px 0 16px; font-weight: 700; font-size: .875rem; overflow-wrap: anywhere; }
+.share-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
+.share-msg { background: var(--surface2); border-radius: 12px; padding: 12px 14px; font-size: .92rem; margin-bottom: 12px; }
+.install-steps { margin: 0; padding: 0; list-style: none; counter-reset: st; display: grid; gap: 12px; }
+.install-steps li { counter-increment: st; display: grid; grid-template-columns: 32px 1fr; column-gap: 12px; align-items: start; }
+.install-steps li::before { content: counter(st); grid-row: span 2; width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; background: var(--surface2); font-weight: 700; }
+.install-steps li span { font-size: .92rem; }
+.share-link { display: flex; align-items: center; gap: 12px; text-decoration: none; color: var(--text); }
+.share-link > .i { width: 26px; height: 26px; color: var(--brand); }
+.share-link .chev { color: var(--muted); font-size: 1.2rem; }
+@media (hover: hover) and (pointer: fine) { .share-link:hover { border-color: var(--brand); } }
