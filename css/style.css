@@ -181,6 +181,10 @@ label.check input { width: 22px; height: 22px; accent-color: var(--brand); }
 .step .st { font-weight: 600; }
 .deck-row { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--border); }
 .deck-row:last-child { border-bottom: 0; }
+button.deck-row { width: 100%; background: none; border: 0; border-bottom: 1px solid var(--border); text-align: left; color: inherit; font: inherit; min-height: 56px; border-radius: 0; }
+button.deck-row:last-child { border-bottom: 0; }
+.deck-row .chev { color: var(--muted); font-size: 1.2rem; flex: none; }
+@media (hover: hover) { button.deck-row:hover b { color: var(--brand); } }
 .deck-row .ic { font-size: 1.6rem; width: 38px; text-align: center; flex: none; }
 .deck-row .bar { margin-top: 6px; }
 

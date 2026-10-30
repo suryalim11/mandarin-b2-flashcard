@@ -322,9 +322,12 @@
       var cs = CARDS.filter(function (c) { return c.deck === d.id; });
       var l = cs.filter(function (c) { return isLearned(S.srs[c.key]); }).length;
       var m = cs.filter(function (c) { var st = S.srs[c.key]; return st && st.interval >= 21; }).length;
-      h += '<div class="deck-row"><span class="ic" aria-hidden="true">' + esc(d.icon) + '</span><div class="grow"><div class="row between"><span><b>' + esc(d.name) +
-        '</b> <span class="zh muted small">' + esc(d.zh) + '</span></span><span class="small muted">' + (cs.length ? l + " / " + cs.length : "belum ada kartu") + '</span></div>' +
-        '<div class="bar"><i style="width:' + pct(l, cs.length) + '%"></i></div>' + (cs.length ? '<div class="small muted">dikuasai: ' + m + "</div>" : "") + "</div></div>";
+      var inner = '<span class="ic" aria-hidden="true">' + esc(d.icon) + '</span><div class="grow"><div class="row between"><span><b>' + esc(d.name) +
+        '</b> <span class="zh muted small">' + esc(d.zh) + '</span></span><span class="small muted">' + (cs.length ? l + " / " + cs.length + (m ? " · " + m + " dikuasai" : "") : "belum ada kartu") + '</span></div>' +
+        '<div class="bar"><i style="width:' + pct(l, cs.length) + '%"></i></div></div>';
+      // baris dek = pintasan langsung ke latihan dek itu
+      h += cs.length ? '<button type="button" class="deck-row tap" data-act="home-deck" data-d="' + esc(d.id) + '" aria-label="Latih dek ' + esc(d.name) + '">' + inner + '<span class="chev" aria-hidden="true">›</span></button>'
+        : '<div class="deck-row">' + inner + "</div>";
     });
     h += "</section>";
 
@@ -351,6 +354,10 @@
   }
   ACT["home-cards"] = function () { CS.decks = []; CS.fresh = true; go("#/cards"); };
   ACT["home-talk"] = function (el) { var id = el.getAttribute("data-id"); go(id ? "#/talk/" + encodeURIComponent(id) : "#/talk"); };
+  ACT["home-deck"] = function (el) {
+    var id = el.getAttribute("data-d"), dk = deckById(id);
+    CS.decks = [id]; CS.dir = dk && dk.kind === "phrase" ? "id2zh" : (S.settings.dir || "zh2id"); CS.fresh = true; go("#/cards");
+  };
   ACT["home-phr"] = function () { CS.decks = ["phrases"]; CS.dir = "id2zh"; CS.fresh = true; go("#/cards"); };
   ACT["hint-install-x"] = function () { dismissedInstall = true; S.hints.install = true; save(); rerender(); };
   ACT.install = function () {
