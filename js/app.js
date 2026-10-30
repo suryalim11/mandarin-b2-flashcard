@@ -900,7 +900,7 @@
 
   /* ---- list ---- */
   function talkList() {
-    var h = head("Percakapan", "Latihan bicara — kelemahan utama? Mulai dari sini.");
+    var h = head("Bicara", arr(W.DIALOGUES).length + " skenario kerja · ngobrol bebas dengan Claude");
     h += '<div class="stack"><section class="panel"><h2>🤖 Free talk dengan Claude</h2><p class="small muted">Pilih topik, lalu ngobrol bebas dengan Claude memakai akunmu sendiri.</p><div class="chips">';
     arr(W.FREE_TALK_TOPICS).forEach(function (t) {
       h += '<button type="button" class="chip" data-act="ft-open" data-id="' + esc(t.id) + '">' + esc(t.icon) + " " + esc(t.zh) + "</button>";
@@ -922,7 +922,7 @@
   SCREENS.talk = function (args) {
     if (!args[0]) { talkList(); return; }
     var d = dlById(args[0]);
-    if (!d) { view(head("Percakapan", "") + '<div class="panel center"><p>Skenario tidak ditemukan.</p><a class="btn" href="#/talk">Kembali</a></div>'); return; }
+    if (!d) { view(head("Bicara", "") +'<div class="panel center"><p>Skenario tidak ditemukan.</p><a class="btn" href="#/talk">Kembali</a></div>'); return; }
     if (TK.id !== d.id) { TK.id = d.id; TK.mode = "read"; RP = null; SH = { i: 0, auto: false, tok: 0, timer: null }; }
     if (TK.py == null) TK.py = S.settings.showPinyin;
     onLeave(function () { shStop(); PLAYING = false; });
@@ -944,7 +944,7 @@
     }
     info += "</details>";
 
-    var h = '<header class="screen-head"><div><a class="btn sm" href="#/talk">‹ Percakapan</a></div></header>';
+    var h = '<header class="screen-head"><div><a class="btn sm" href="#/talk">‹ Bicara</a></div></header>';
     h += '<div class="mb"><h1 class="zh" style="font-size:1.6rem">' + esc(d.title_zh) + '</h1><div class="muted">' + esc(d.title_id) + (d.title_en ? " · " + esc(d.title_en) : "") + "</div></div>";
     h += '<div class="seg mb" role="tablist" aria-label="Mode latihan">' + [["read", "📖 Dengar &amp; Baca"], ["role", "🎭 Roleplay"], ["shadow", "🔁 Shadowing"], ["claude", "🤖 Claude"]].map(function (x) {
       return '<button type="button" role="tab" class="' + (TK.mode === x[0] ? "on" : "") + '" data-act="tmode" data-v="' + x[0] + '">' + x[1] + "</button>";
