@@ -37,11 +37,12 @@
   }
   function isDue(state, t) { return !!state && !!state.due && state.due <= (t || today()); }
   function label(days) {
-    if (days <= 0) return "segera";
-    if (days < 7) return days + "h";
-    if (days < 30) return Math.round(days / 7) + "mg";
-    if (days < 365) return Math.round(days / 30) + "bln";
-    return (Math.round(days / 36.5) / 10) + "th";
+    if (days <= 0) return "sesi ini";
+    if (days === 1) return "besok";
+    if (days < 7) return days + " hari";
+    if (days < 30) return Math.round(days / 7) + " mgg";
+    if (days < 365) return Math.round(days / 30) + " bln";
+    return (Math.round(days / 36.5) / 10) + " thn";
   }
   function nextIntervalLabel(state, grade) { return label(rate(state, grade).interval); }
 
