@@ -2,7 +2,7 @@
 (function () {
   "use strict";
   var W = window, D = document;
-  var VERSION = "1.2.0";
+  var VERSION = "1.2.1";
   var KEY = "mb2.v1";
 
   /* =========================================================
@@ -38,6 +38,7 @@
 
   /* ikon garis (pengganti emoji) — satu gaya untuk semua platform */
   var ICONS = {
+    gear: '<circle cx="12" cy="12" r="3"/><path d="M12 3v2.5M12 18.5V21M3 12h2.5M18.5 12H21M5.6 5.6l1.8 1.8M16.6 16.6l1.8 1.8M5.6 18.4l1.8-1.8M16.6 7.4l1.8-1.8"/>',
     vol: '<path d="M11 5 6 9H3v6h3l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M18.5 5.5a9 9 0 0 1 0 13"/>',
     volx: '<path d="M11 5 6 9H3v6h3l5 4z"/><path d="m16 9 5 6M21 9l-5 6"/>',
     play: '<path d="M7 4.8v14.4a.8.8 0 0 0 1.2.7l11.3-7.2a.8.8 0 0 0 0-1.4L8.2 4.1A.8.8 0 0 0 7 4.8z"/>',
@@ -311,13 +312,62 @@
   });
   W.addEventListener("appinstalled", function () { deferredPrompt = null; if (CUR.name === "home") rerender(); });
 
-  function ttsHelpHtml() {
-    // ringkas: satu baris, instruksi hanya untuk platform yang sedang dipakai
-    var how = isIOS() ? "Settings → Accessibility → Spoken Content → Voices → Chinese (Taiwan) → unduh Meijia."
-      : "Settings → Time &amp; language → Language &amp; region → tambah 中文(台灣) lalu pasang paket Speech.";
-    return '<details class="panel tip warn"><summary><b>' + I("volx") + " " + (TTS.status() === "none" ? "Suara Mandarin belum terpasang" : "Suara Mandarin Taiwan belum terpasang") +
-      '</b> <span class="small muted">· cara pasang</span></summary><p class="small mt">' + how + "</p></details>";
+  function platform() {
+    var ua = navigator.userAgent || "";
+    if (isIOS()) return "ios";
+    if (/Android/i.test(ua)) return "android";
+    if (/Windows/i.test(ua)) return "windows";
+    if (/Macintosh|Mac OS X/i.test(ua)) return "mac";
+    return "other";
   }
+  // panduan pasang suara Taiwan sesuai perangkat; Windows bisa langsung membuka Settings lewat ms-settings:
+  // (iOS/Android tidak mengizinkan web membuka Pengaturan, jadi tampilkan langkah yang tepat)
+  function ttsHelpHtml(open) {
+    var p = platform(), st = TTS.status();
+    var dev = { ios: "iPhone/iPad", android: "Android", windows: "Windows", mac: "Mac", other: "perangkat ini" }[p];
+    function li(t, d) { return "<li><b>" + t + "</b><span>" + d + "</span></li>"; }
+    var recheck = '<button type="button" class="btn" data-act="tts-recheck">' + I("repeat") + " Cek lagi</button>";
+    var body = "";
+    if (st === "zh-other") body += '<p class="small">Sekarang memakai <b>' + esc(TTS.voiceName()) + "</b>: aksennya bukan Taiwan.</p>";
+    if (p === "windows") {
+      body += '<div class="tts-actions"><a class="btn primary" href="ms-settings:speech">' + I("gear") + " Buka Pengaturan Speech</a>" + recheck + "</div>" +
+        '<ol class="install-steps">' +
+        li("Buka Pengaturan Speech", "Klik tombol di atas. Kalau browser bertanya, pilih <b>Open Settings</b>.") +
+        li("Manage voices → Add voices", "Cari <b>Chinese (Traditional, Taiwan)</b> / 中文(台灣), centang, lalu <b>Add</b>.") +
+        li("Tutup lalu buka lagi browser", "Suara baru baru terbaca setelah browser dibuka ulang. Lalu tekan <b>Cek lagi</b>.") + "</ol>" +
+        '<p class="small muted mt">Tidak ada "Add voices"? Buka <a href="ms-settings:regionlanguage">Language &amp; region</a> → Add a language → 中文(台灣) → centang Text-to-speech.' +
+        (/Edg\//.test(navigator.userAgent) ? "" : " Alternatif tercepat: buka app ini di <b>Microsoft Edge</b>, yang sudah punya suara Taiwan online (perlu internet).") + "</p>";
+    } else if (p === "ios") {
+      body += '<p class="small">iPhone/iPad tidak mengizinkan web membuka Pengaturan langsung. Ikuti langkah ini (±1 menit):</p><ol class="install-steps">' +
+        li("Buka app Settings → Accessibility", "Ikon roda gigi abu-abu di Home Screen.") +
+        li("Read &amp; Speak → Voices", "Di iOS 17–18 namanya <b>Spoken Content</b> → Voices.") +
+        li("Chinese → Meijia (Taiwan)", "Tap ikon unduh pada versi <b>Enhanced</b>, tunggu sampai selesai.") +
+        li("Tutup app ini lalu buka lagi", "Geser app ke atas dari app switcher, buka lagi, lalu tekan <b>Cek lagi</b>.") + "</ol>" +
+        '<p class="small muted mt">Terdengar seperti bahasa Kanton? Di Voices → Chinese, pastikan yang dipilih Taiwan, bukan Hong Kong.</p><div class="tts-actions">' + recheck + "</div>";
+    } else if (p === "android") {
+      body += '<ol class="install-steps">' +
+        li("Settings → System → Languages", "Di Samsung: General management → Language.") +
+        li("Text-to-speech output", "Pilih mesin <b>Google</b> → ikon roda gigi → <b>Install voice data</b>.") +
+        li("Unduh 中文（台灣）", "Lalu tutup dan buka lagi app ini, tekan <b>Cek lagi</b>.") + '</ol><div class="tts-actions">' + recheck + "</div>";
+    } else if (p === "mac") {
+      body += '<ol class="install-steps">' +
+        li("System Settings → Accessibility", "Read &amp; Speak (macOS lama: Spoken Content).") +
+        li("System voice → Manage Voices", "Cari <b>Chinese (Taiwan)</b>, centang <b>Meijia</b>, tunggu unduhan.") +
+        li("Buka lagi browser", "Lalu tekan <b>Cek lagi</b>.") + '</ol><div class="tts-actions">' + recheck + "</div>";
+    } else {
+      body += '<p class="small">Pasang suara teks-ke-ucapan <b>Chinese (Taiwan)</b> di pengaturan aksesibilitas/bahasa perangkat, lalu buka lagi browser.</p><div class="tts-actions">' + recheck + "</div>";
+    }
+    return '<details class="panel tip warn tts-help"' + (open ? " open" : "") + "><summary><b>" + I("volx") + " " +
+      (st === "none" ? "Suara Mandarin belum terpasang" : "Suara Mandarin Taiwan belum terpasang") +
+      '</b> <span class="small muted">· cara pasang di ' + dev + '</span></summary><div class="mt">' + body + "</div></details>";
+  }
+  ACT["tts-recheck"] = function () {
+    TTS.refresh();
+    setTimeout(function () {
+      rerender();
+      toast(TTS.status() === "tw" ? "Suara Taiwan terdeteksi: " + TTS.voiceName() : "Belum terdeteksi. Tutup lalu buka lagi browser/app, kemudian coba lagi.");
+    }, 400);
+  };
   TTS.onChange(function () { if (CUR.name === "home" || CUR.name === "settings") rerender(); });
 
   SCREENS.home = function () {
@@ -1426,7 +1476,7 @@
     h += '<section class="panel"><h2>Kartu baru per hari</h2>' + segHtml("newPerDay", [5, 10, 15, 20, 30], [5, 10, 15, 20, 30], S.settings.newPerDay) + "</section>";
     h += '<section class="panel"><h2>Audio</h2><p class="small muted">Kecepatan bicara</p>' + segHtml("rate", [0.6, 0.7, 0.85, 1, 1.2], ["0.6×", "0.7×", "0.85×", "1×", "1.2×"], S.settings.rate) +
       '<div class="row wrap mt"><button type="button" class="btn soft" data-act="test-voice">' + I("vol") + ' Tes suara</button><span class="small muted">' +
-      (st === "none" ? "Tidak ada suara Mandarin terdeteksi" : "Suara: " + esc(TTS.voiceName())) + "</span></div>" + (st !== "tw" ? '<div class="mt">' + ttsHelpHtml().replace('class="panel tip warn"', 'class="tip warn"') + "</div>" : "") + "</section>";
+      (st === "none" ? "Tidak ada suara Mandarin terdeteksi" : "Suara: " + esc(TTS.voiceName())) + "</span></div>" + (st !== "tw" ? '<div class="mt">' + ttsHelpHtml(true).replace('class="panel tip warn tts-help"', 'class="tip warn tts-help"') + "</div>" : "") + "</section>";
     h += '<section class="panel"><h2>Kartu dari Claude (' + S.custom.length + ")</h2>";
     if (!S.custom.length) h += '<p class="small muted">Belum ada. Impor lewat tab Bicara → Claude.</p>';
     S.custom.forEach(function (c) {

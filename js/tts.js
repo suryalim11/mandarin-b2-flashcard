@@ -74,5 +74,6 @@
   function voiceName() { return voice ? voice.name + " (" + voice.lang + ")" : ""; }
   function onChange(cb) { cbs.push(cb); }
 
-  W.TTS = { speak: speak, speakSeq: speakSeq, stop: stop, status: status, voiceName: voiceName, onChange: onChange, supported: !!synth };
+  // refresh: baca ulang daftar suara (dipakai tombol "Cek lagi" setelah pengguna memasang suara)
+  W.TTS = { speak: speak, speakSeq: speakSeq, stop: stop, status: status, voiceName: voiceName, onChange: onChange, refresh: pick, supported: !!synth };
 })(typeof window !== "undefined" ? window : this);

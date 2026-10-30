@@ -429,3 +429,8 @@ h1, h2 { text-wrap: balance; }
 .share-link > .i { width: 26px; height: 26px; color: var(--brand); }
 .share-link .chev { color: var(--muted); font-size: 1.2rem; }
 @media (hover: hover) and (pointer: fine) { .share-link:hover { border-color: var(--brand); } }
+
+/* ---------- Panduan pasang suara per perangkat ---------- */
+.tts-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 6px 0 12px; }
+.tts-help .install-steps { margin-top: 4px; }
+.tts-help .install-steps li::before { background: var(--surface); }
