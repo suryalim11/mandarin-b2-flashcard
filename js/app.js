@@ -914,20 +914,21 @@
   /* ---- list ---- */
   function talkList() {
     var h = head("Bicara", arr(W.DIALOGUES).length + " skenario kerja · ngobrol bebas dengan Claude");
-    h += '<div class="stack"><section class="panel"><h2>🤖 Free talk dengan Claude</h2><p class="small muted">Pilih topik, lalu ngobrol bebas dengan Claude memakai akunmu sendiri.</p><div class="chips">';
-    arr(W.FREE_TALK_TOPICS).forEach(function (t) {
-      h += '<button type="button" class="chip" data-act="ft-open" data-id="' + esc(t.id) + '">' + esc(t.icon) + " " + esc(t.zh) + "</button>";
-    });
-    h += "</div></section>";
+    // skenario (latihan utama, offline) dulu; free talk dengan Claude sesudahnya
     var ds = arr(W.DIALOGUES);
-    h += '<section><h2 style="margin-bottom:10px;font-size:1.05rem">Skenario kerja</h2>';
+    h += '<div class="stack"><section><h2 style="margin-bottom:10px;font-size:1.05rem">Skenario kerja</h2>';
     if (!ds.length) h += '<div class="panel center muted">Skenario dialog belum tersedia.</div>';
     ds.forEach(function (d) {
       var done = S.dialogues[d.id] && S.dialogues[d.id].done;
+      var other = d.roles && d.roles[d.learner === "A" ? "B" : "A"];
       h += '<a class="d-card" href="#/talk/' + encodeURIComponent(d.id) + '"><div class="grow"><div class="zh">' + esc(d.title_zh) + '</div><div class="small muted">' + esc(d.title_id) +
-        " · " + arr(d.lines).length + " baris, " + learnerTurns(d).length + ' giliranmu</div></div>' + (done ? '<span class="badge good">✅ selesai</span>' : "") + "<span aria-hidden=\"true\">›</span></a>";
+        (other ? " · dengan " + esc(other.id) : "") + '</div></div>' + (done ? '<span class="badge good">✅ selesai</span>' : "") + "<span aria-hidden=\"true\">›</span></a>";
     });
-    h += "</section></div>";
+    h += '</section><section class="panel"><h2>🤖 Free talk dengan Claude</h2><p class="small muted">Pilih topik, lalu ngobrol bebas dengan Claude memakai akunmu sendiri (perlu internet).</p><div class="chips">';
+    arr(W.FREE_TALK_TOPICS).forEach(function (t) {
+      h += '<button type="button" class="chip" data-act="ft-open" data-id="' + esc(t.id) + '">' + esc(t.icon) + " " + esc(t.zh) + "</button>";
+    });
+    h += "</div></section></div>";
     view(h);
   }
 
