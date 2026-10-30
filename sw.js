@@ -1,5 +1,5 @@
 /* Service worker: precache app shell + data, cache-first. Bump CACHE to ship updates. */
-const CACHE = "mb2-v1";
+const CACHE = "mb2-v2";
 const CORE = ["./", "./index.html", "./manifest.webmanifest", "./css/style.css",
   "./js/pinyin.js", "./js/srs.js", "./js/tts.js", "./js/app.js",
   "./icons/icon-192.png", "./icons/icon-512.png", "./icons/icon-maskable-512.png", "./icons/apple-touch-icon.png"];
