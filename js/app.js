@@ -30,8 +30,11 @@
   }
   function head(title, sub, right) {
     return '<header class="screen-head"><div><h1>' + title + "</h1>" + (sub ? '<div class="sub">' + sub + "</div>" : "") + "</div>" +
-      (right === undefined ? '<a class="icon-btn" href="#/settings" aria-label="Pengaturan">⚙️</a>' : right) + "</header>";
+      (right === undefined ? '<a class="icon-btn head-nav" href="#/settings" aria-label="Pengaturan">' + ICON_GEAR + "</a>" : right) + "</header>";
   }
+  // ikon SVG yang sama dengan navigasi (bukan emoji) supaya konsisten di semua platform
+  var ICON_GEAR = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 3v2.5M12 18.5V21M3 12h2.5M18.5 12H21M5.6 5.6l1.8 1.8M16.6 16.6l1.8 1.8M5.6 18.4l1.8-1.8M16.6 7.4l1.8-1.8"/></svg>';
+  var ICON_HOME = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11.5 12 4l9 7.5M5.5 10v9.5h13V10"/></svg>';
   function view(html) { $("#view").innerHTML = html; }
 
   /* toast + modal */
@@ -1339,7 +1342,7 @@
   }
   SCREENS.settings = function () {
     var st = TTS.status();
-    var h = head("Pengaturan", "Versi " + VERSION, '<a class="icon-btn" href="#/home" aria-label="Beranda">🏠</a>');
+    var h = head("Pengaturan", "Versi " + VERSION, '<a class="icon-btn head-nav" href="#/home" aria-label="Beranda">' + ICON_HOME + "</a>");
     h += '<div class="stack"><section class="panel"><h2>Tampilan kartu</h2>' + switchRow("showPinyin", "Tampilkan pinyin") + switchRow("showEnglish", "Tampilkan English") + switchRow("toneColors", "Warna nada") +
       '<p class="small mt"><span class="zh"><span class="t1">妈</span> <span class="t2">麻</span> <span class="t3">馬</span> <span class="t4">罵</span> <span class="t5">嗎</span></span> nada 1–4 &amp; netral</p></section>';
     h += '<section class="panel"><h2>Tema</h2>' + segHtml("theme", ["auto", "light", "dark"], ["Otomatis", "Terang", "Gelap"], S.settings.theme) + "</section>";

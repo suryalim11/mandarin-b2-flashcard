@@ -122,6 +122,9 @@ mark { background: var(--warn-soft); color: inherit; border-radius: 4px; padding
   font-size: 1.15rem; line-height: 1; flex: none;
 }
 .icon-btn.sm { width: 44px; height: 44px; }
+.icon-btn svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.head-nav { color: var(--muted); }
+@media (min-width: 768px) { .head-nav { display: none; } }
 .icon-btn.ghost { border-color: transparent; background: transparent; }
 
 .chips { display: flex; flex-wrap: wrap; gap: 8px; }
