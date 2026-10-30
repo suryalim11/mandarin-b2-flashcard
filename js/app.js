@@ -295,21 +295,22 @@
     var sd = dy.sessionDone;
     var h = head("華語 B2", esc(dateStr) + " &nbsp;·&nbsp; 🔥 " + streakNow() + " hari");
     h += '<div class="stack">';
-    h += '<div class="tiles">' +
-      '<div class="tile"><b>' + dueN + "</b><span>Jatuh tempo hari ini</span></div>" +
-      '<div class="tile"><b>' + newN + "</b><span>Kartu baru tersedia</span></div>" +
-      '<div class="tile"><b>' + learned + "</b><span>Sudah dipelajari</span></div>" +
-      '<div class="tile"><b>🔥 ' + streakNow() + "</b><span>Streak (hari)</span></div></div>";
 
     function step(n, done, label, sub, act, extra) {
       return '<li><button type="button" class="step ' + (done ? "done" : "") + '" data-act="' + act + '"' + (extra || "") + '><span class="num">' + (done ? "✓" : n) + '</span><span class="grow"><span class="st">' + label +
         '</span><br><span class="muted small">' + sub + '</span></span><span aria-hidden="true">›</span></button></li>';
     }
-    h += '<section class="panel"><h2>Sesi hari ini <span class="muted small">(±15 menit)</span></h2><ol class="steps">' +
+    // satu tombol utama yang selalu menunjuk langkah berikutnya
+    var cta;
+    if (!sd.cards && dueN + newN > 0) cta = '<button type="button" class="btn primary block lg" data-act="home-cards">Mulai: review ' + (dueN + newN) + " kartu</button>";
+    else if (!sd.dialogue && dl) cta = '<button type="button" class="btn primary block lg" data-act="home-talk" data-id="' + esc(dl.id) + '">Lanjut: roleplay ' + esc(dl.title_zh) + "</button>";
+    else if (!sd.phrases) cta = '<button type="button" class="btn primary block lg" data-act="home-phr">Lanjut: 5 kalimat percakapan</button>';
+    else cta = '<a class="btn soft block lg" href="#/quiz">Sesi hari ini selesai ✓ · Latihan tambahan: kuis</a>';
+    h += '<section class="panel today"><h2>Sesi hari ini <span class="muted small">±15 menit</span></h2>' + cta + '<ol class="steps mt">' +
       step(1, sd.cards, "Review kartu", dueN + " jatuh tempo + " + newN + " baru", "home-cards") +
       step(2, sd.dialogue, "Roleplay 1 skenario", dl ? esc(dl.title_zh + " · " + dl.title_id) : "Belum ada skenario", "home-talk", dl ? ' data-id="' + esc(dl.id) + '"' : "") +
       step(3, sd.phrases, "5 kalimat percakapan", Math.min(5, dy.phraseRated || 0) + " / 5 hari ini", "home-phr") +
-      "</ol></section>";
+      '</ol><p class="stat-line small muted"><b>' + dueN + "</b> jatuh tempo · <b>" + newN + "</b> kartu baru · <b>" + learned + "</b> sudah dipelajari</p></section>";
 
     /* per deck progress */
     h += '<section class="panel"><h2>Progres per dek</h2>';
