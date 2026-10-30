@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>華語 B2 Flashcard</title>
+<meta name="description" content="Flashcard Mandarin offline untuk TOCFL Band B Level 4 (B2)">
+<meta name="theme-color" content="#f5f6f8" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#12161c" media="(prefers-color-scheme: dark)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="華語B2">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="icon" type="image/png" href="icons/icon-192.png">
+<link rel="stylesheet" href="./css/style.css">
+</head>
+<body>
+<div id="shell">
+  <nav id="nav" aria-label="Navigasi utama">
+    <div class="brand"><span class="brand-mark">華</span><span class="brand-text">華語 B2</span></div>
+    <a href="#/home" data-nav="home"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11.5 12 4l9 7.5M5.5 10v9.5h13V10"/></svg><span>Beranda</span></a>
+    <a href="#/cards" data-nav="cards"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="6" width="14" height="13" rx="2.5"/><path d="M7 6V4.5A1.5 1.5 0 0 1 8.5 3H19a1.5 1.5 0 0 1 1.5 1.5V15a1.5 1.5 0 0 1-1.5 1.5h-1.5"/></svg><span>Kartu</span></a>
+    <a href="#/grammar" data-nav="grammar"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4.5h10.5a3 3 0 0 1 3 3V20H8a3 3 0 0 1-3-3zM5 17a3 3 0 0 1 3-3h10.5M9 8.5h6"/></svg><span>Grammar</span></a>
+    <a href="#/talk" data-nav="talk"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5h16v10.5H11l-4.5 3.5V16H4zM8 10h8"/></svg><span>Bicara</span></a>
+    <a href="#/quiz" data-nav="quiz"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="m8.5 12.3 2.5 2.5 4.5-5"/></svg><span>Kuis</span></a>
+    <a href="#/settings" data-nav="settings" class="nav-settings"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 3v2.5M12 18.5V21M3 12h2.5M18.5 12H21M5.6 5.6l1.8 1.8M16.6 16.6l1.8 1.8M5.6 18.4l1.8-1.8M16.6 7.4l1.8-1.8"/></svg><span>Pengaturan</span></a>
+  </nav>
+  <main id="view" tabindex="-1">
+    <noscript><p style="padding:24px">Aplikasi ini membutuhkan JavaScript.</p></noscript>
+  </main>
+</div>
+<div id="banner-root"></div>
+<div id="modal-root"></div>
+<div id="toast-root" aria-live="polite"></div>
+
+<script src="data/decks.js"></script>
+<script src="data/vocab-a.js"></script>
+<script src="data/vocab-b.js"></script>
+<script src="data/phrases.js"></script>
+<script src="data/grammar.js"></script>
+<script src="data/dialogues-a.js"></script>
+<script src="data/dialogues-b.js"></script>
+<script src="data/prompts.js"></script>
+<script src="js/pinyin.js"></script>
+<script src="js/srs.js"></script>
+<script src="js/tts.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

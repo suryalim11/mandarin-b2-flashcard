@@ -1,0 +1,9 @@
+# Materi referensi pribadi (buku, PDF, audio) — jangan dipublikasikan
+materi tocfl/
+*.pdf
+*.mp3
+*.rar
+*.zip
+desktop.ini
+Thumbs.db
+.DS_Store

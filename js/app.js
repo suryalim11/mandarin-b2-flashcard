@@ -1,0 +1,1420 @@
+/* 華語 B2 Flashcard — main app (vanilla JS, classic script) */
+(function () {
+  "use strict";
+  var W = window, D = document;
+  var VERSION = "1.0.0";
+  var KEY = "mb2.v1";
+
+  /* =========================================================
+   * 1. Helpers
+   * ========================================================= */
+  function $(s, el) { return (el || D).querySelector(s); }
+  function $$(s, el) { return Array.prototype.slice.call((el || D).querySelectorAll(s)); }
+  function esc(s) {
+    return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+  }
+  function arr(x) { return Array.isArray(x) ? x : []; }
+  function shuffle(a) {
+    a = a.slice();
+    for (var i = a.length - 1; i > 0; i--) { var j = Math.floor(Math.random() * (i + 1)); var t = a[i]; a[i] = a[j]; a[j] = t; }
+    return a;
+  }
+  function hasCJK(s) { return /[㐀-鿿]/.test(s || ""); }
+  function plain(s) { return String(s || "").replace(/[^㐀-鿿A-Za-z0-9]/g, ""); }
+  function clamp(n, a, b) { return Math.max(a, Math.min(b, n)); }
+  function today() { return SRS.today(); }
+  function pct(a, b) { return b ? Math.round(100 * a / b) : 0; }
+  function tcolor(zh, py) { return S.settings.toneColors ? Pinyin.colorize(zh, py) : esc(zh); }
+  function playBtn(text, cls) {
+    return '<button type="button" class="icon-btn ' + (cls || "") + '" data-act="speak" data-t="' + esc(text) + '" aria-label="Putar audio">🔊</button>';
+  }
+  function head(title, sub, right) {
+    return '<header class="screen-head"><div><h1>' + title + "</h1>" + (sub ? '<div class="sub">' + sub + "</div>" : "") + "</div>" +
+      (right === undefined ? '<a class="icon-btn" href="#/settings" aria-label="Pengaturan">⚙️</a>' : right) + "</header>";
+  }
+  function view(html) { $("#view").innerHTML = html; }
+
+  /* toast + modal */
+  function toast(msg) {
+    var root = $("#toast-root");
+    var el = D.createElement("div");
+    el.className = "toast"; el.textContent = msg;
+    root.appendChild(el);
+    setTimeout(function () { if (el.parentNode) el.parentNode.removeChild(el); }, 3200);
+  }
+  var modalOnClose = null;
+  function openModal(html, opts) {
+    opts = opts || {};
+    closeModal();
+    var root = $("#modal-root");
+    root.innerHTML = '<div class="overlay ' + (opts.sheet ? "bottom" : "") + '" data-act="modal-bg"><div class="sheet" role="dialog" aria-modal="true">' + html + "</div></div>";
+    modalOnClose = opts.onClose || null;
+    var f = $("#modal-root [autofocus], #modal-root .btn.primary");
+    if (f) { try { f.focus({ preventScroll: true }); } catch (e) {} }
+  }
+  function closeModal() {
+    var root = $("#modal-root");
+    if (root && root.firstChild) {
+      root.innerHTML = "";
+      if (modalOnClose) { var f = modalOnClose; modalOnClose = null; f(); }
+    }
+  }
+  var confirmCb = null;
+  function confirmModal(msg, okLabel, cb, danger) {
+    confirmCb = cb;
+    openModal("<h2>Konfirmasi</h2><p>" + esc(msg) + '</p><div class="actions"><button type="button" class="btn" data-act="modal-close">Batal</button>' +
+      '<button type="button" class="btn ' + (danger ? "danger" : "primary") + '" data-act="confirm-ok">' + esc(okLabel || "Ya") + "</button></div>");
+  }
+  function copyText(t) {
+    function fallback() {
+      var ta = D.createElement("textarea");
+      ta.value = t; ta.setAttribute("readonly", ""); ta.style.cssText = "position:fixed;left:-9999px;top:0;opacity:0;font-size:16px";
+      D.body.appendChild(ta); ta.focus(); ta.select();
+      try { ta.setSelectionRange(0, t.length); } catch (e) {}
+      var ok = false;
+      try { ok = D.execCommand("copy"); } catch (e) {}
+      D.body.removeChild(ta);
+      return ok;
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText && W.isSecureContext) {
+      return navigator.clipboard.writeText(t).then(function () { return true; }, function () { return fallback(); });
+    }
+    return Promise.resolve(fallback());
+  }
+
+  /* =========================================================
+   * 2. State (localStorage with in-memory fallback)
+   * ========================================================= */
+  function defaults() {
+    return {
+      v: 1, srs: {},
+      settings: { showPinyin: true, showEnglish: true, toneColors: true, rate: 0.85, newPerDay: 15, theme: "auto", dir: "zh2id" },
+      daily: {}, streak: { count: 0, last: "" }, custom: [], grammar: {}, dialogues: {}, hints: {}
+    };
+  }
+  function normalizeState(o) {
+    var d = defaults();
+    if (!o || typeof o !== "object") return d;
+    var k;
+    for (k in (o.settings || {})) d.settings[k] = o.settings[k];
+    d.srs = o.srs && typeof o.srs === "object" ? o.srs : {};
+    d.daily = o.daily && typeof o.daily === "object" ? o.daily : {};
+    d.streak = o.streak && typeof o.streak === "object" ? { count: +o.streak.count || 0, last: o.streak.last || "" } : d.streak;
+    d.custom = arr(o.custom);
+    d.grammar = o.grammar && typeof o.grammar === "object" ? o.grammar : {};
+    d.dialogues = o.dialogues && typeof o.dialogues === "object" ? o.dialogues : {};
+    d.hints = o.hints && typeof o.hints === "object" ? o.hints : {};
+    return d;
+  }
+  function loadState() {
+    try { var r = W.localStorage.getItem(KEY); if (r) return normalizeState(JSON.parse(r)); } catch (e) {}
+    return defaults();
+  }
+  var S = loadState();
+  function save() { try { W.localStorage.setItem(KEY, JSON.stringify(S)); } catch (e) {} }
+  function day(date) {
+    date = date || today();
+    var d = S.daily[date];
+    if (!d) d = S.daily[date] = { reviewed: 0, newSeen: 0, phraseRated: 0, sessionDone: { cards: false, dialogue: false, phrases: false } };
+    if (!d.sessionDone) d.sessionDone = { cards: false, dialogue: false, phrases: false };
+    return d;
+  }
+  function pruneDaily() {
+    var keys = Object.keys(S.daily).sort();
+    while (keys.length > 60) delete S.daily[keys.shift()];
+  }
+  function applyTheme() {
+    var t = S.settings.theme, root = D.documentElement;
+    if (t === "light" || t === "dark") root.setAttribute("data-theme", t); else root.removeAttribute("data-theme");
+    D.body.classList.toggle("no-tone", !S.settings.toneColors);
+  }
+
+  /* =========================================================
+   * 3. Normalised cards
+   * ========================================================= */
+  var CARDS = [], CARD = {}, DECKS = [];
+  function buildDecks() {
+    DECKS = arr(W.DECKS).slice();
+    if (!DECKS.length) {
+      DECKS = [{ id: "phrases", kind: "phrase", icon: "💬", zh: "會話句型", name: "Kalimat Percakapan" }, { id: "claude", kind: "custom", icon: "🤖", zh: "我的卡片", name: "Dari Claude" }];
+    }
+  }
+  function rebuildCards() {
+    buildDecks();
+    CARDS = []; CARD = {};
+    function add(c) { if (c.key && !CARD[c.key] && c.zh) { CARD[c.key] = c; CARDS.push(c); } }
+    arr(W.VOCAB).forEach(function (v) {
+      if (!v) return;
+      add({ key: "v:" + v.id, deck: v.deck, kind: "vocab", zh: v.hanzi, py: v.pinyin, id_meaning: v.id_meaning, en: v.en, pos: v.pos, level: v.level,
+        breakdown: v.breakdown, mnemonic: v.mnemonic, example: v.example });
+    });
+    arr(W.PHRASES).forEach(function (p) {
+      if (!p) return;
+      add({ key: "p:" + p.id, deck: "phrases", kind: "phrase", zh: p.zh, py: p.py, id_meaning: p.id_meaning, en: p.en, register: p.register, note: p.note, group: p.group });
+    });
+    arr(S.custom).forEach(function (c) {
+      if (!c) return;
+      add({ key: "c:" + c.id, deck: "claude", kind: "custom", zh: c.zh, py: c.py, id_meaning: c.id_meaning });
+    });
+  }
+  function deckById(id) { for (var i = 0; i < DECKS.length; i++) if (DECKS[i].id === id) return DECKS[i]; return null; }
+  function cardsOf(deckIds) {
+    if (!deckIds || !deckIds.length) return CARDS;
+    return CARDS.filter(function (c) { return deckIds.indexOf(c.deck) >= 0; });
+  }
+  function findByZh(zh) {
+    for (var i = 0; i < CARDS.length; i++) if (CARDS[i].zh === zh) return CARDS[i];
+    return null;
+  }
+
+  /* =========================================================
+   * 4. Router + event delegation
+   * ========================================================= */
+  var ACT = {}, CHG = {}, SCREENS = {}, CUR = { name: "", args: [] }, cleanups = [];
+  var CS = { tapped: false };
+  function onLeave(fn) { cleanups.push(fn); }
+  function runCleanups() {
+    var c = cleanups; cleanups = [];
+    c.forEach(function (f) { try { f(); } catch (e) {} });
+    TTS.stop();
+  }
+  function parseHash() {
+    var h = (location.hash || "").replace(/^#\/?/, "");
+    var parts = h.split("/").map(function (x) { try { return decodeURIComponent(x); } catch (e) { return x; } });
+    return { name: parts[0] || "home", args: parts.slice(1) };
+  }
+  function route() {
+    runCleanups();
+    var r = parseHash();
+    if (!SCREENS[r.name]) { r = { name: "home", args: [] }; }
+    CUR = r;
+    $$("#nav a").forEach(function (a) { a.classList.toggle("on", a.getAttribute("data-nav") === r.name); });
+    try { SCREENS[r.name](r.args); }
+    catch (e) {
+      view('<div class="panel"><h2>Terjadi kesalahan</h2><p class="muted">' + esc(e && e.message) + '</p><a class="btn" href="#/home">Ke beranda</a></div>');
+      if (W.console) console.error(e);
+    }
+    W.scrollTo(0, 0);
+  }
+  function rerender() {
+    var y = W.pageYOffset;
+    try { SCREENS[CUR.name](CUR.args); } catch (e) { if (W.console) console.error(e); }
+    W.scrollTo(0, y);
+  }
+  function go(h) { if (location.hash === h) route(); else location.hash = h; }
+
+  D.addEventListener("click", function (e) {
+    var el = e.target.closest ? e.target.closest("[data-act]") : null;
+    if (!el) return;
+    var name = el.getAttribute("data-act");
+    if (name === "modal-bg") { if (e.target !== el) return; closeModal(); return; }
+    CS.tapped = true;
+    if (ACT[name]) ACT[name](el, e);
+  });
+  D.addEventListener("change", function (e) {
+    var el = e.target.closest ? e.target.closest("[data-chg]") : null;
+    if (el && CHG[el.getAttribute("data-chg")]) CHG[el.getAttribute("data-chg")](el, e);
+  });
+  D.addEventListener("input", function (e) {
+    var el = e.target.closest ? e.target.closest("[data-inp]") : null;
+    if (el && CHG[el.getAttribute("data-inp")]) CHG[el.getAttribute("data-inp")](el, e);
+  });
+  D.addEventListener("keydown", function (e) {
+    if (e.key === "Escape") closeModal();
+    var tag = (e.target.tagName || "").toLowerCase();
+    if (tag === "input" || tag === "textarea" || tag === "select" || e.ctrlKey || e.metaKey || e.altKey) return;
+    if (CUR.name === "cards" && !$("#modal-root").firstChild) cardsKey(e);
+  });
+  ACT["modal-close"] = function () { closeModal(); };
+  ACT["confirm-ok"] = function () { var cb = confirmCb; confirmCb = null; closeModal(); if (cb) cb(); };
+  ACT.speak = function (el) { TTS.speak(el.getAttribute("data-t"), { rate: +el.getAttribute("data-r") || S.settings.rate }); };
+  ACT.nav = function (el) { go(el.getAttribute("data-h")); };
+  ACT.copy = function (el) {
+    var t = el.getAttribute("data-t") || (($(el.getAttribute("data-from")) || {}).value) || "";
+    copyText(t).then(function (ok) { toast(ok ? "Disalin" : "Gagal menyalin — salin manual"); });
+  };
+
+  /* =========================================================
+   * 5. Progress helpers + Home screen
+   * ========================================================= */
+  function stOf(key) { return S.srs[key] || null; }
+  function isLearned(st) { return !!st && (st.reps >= 1 || st.interval > 0); }
+  function dueList(cards) {
+    var t = today();
+    return cards.filter(function (c) { var st = S.srs[c.key]; return st && st.due && st.due <= t; })
+      .sort(function (a, b) { return S.srs[a.key].due < S.srs[b.key].due ? -1 : S.srs[a.key].due > S.srs[b.key].due ? 1 : 0; });
+  }
+  function newList(cards) { return cards.filter(function (c) { return !S.srs[c.key]; }); }
+  function newRemaining(extra) { return Math.max(0, (S.settings.newPerDay || 15) + (extra || 0) - day().newSeen); }
+  function streakNow() {
+    var l = S.streak.last;
+    if (!l) return 0;
+    if (l === today() || l === SRS.addDays(today(), -1)) return S.streak.count;
+    return 0;
+  }
+  function bumpStreak() {
+    var t = today();
+    if (S.streak.last === t) return;
+    S.streak.count = S.streak.last === SRS.addDays(t, -1) ? S.streak.count + 1 : 1;
+    S.streak.last = t;
+  }
+  function suggestDialogue() {
+    var ds = arr(W.DIALOGUES);
+    for (var i = 0; i < ds.length; i++) if (!(S.dialogues[ds[i].id] && S.dialogues[ds[i].id].done)) return ds[i];
+    return ds[0] || null;
+  }
+  var dismissedInstall = false, deferredPrompt = null;
+  function isStandalone() {
+    return navigator.standalone === true || (W.matchMedia && W.matchMedia("(display-mode: standalone)").matches);
+  }
+  function isIOS() {
+    return /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  }
+  W.addEventListener("beforeinstallprompt", function (e) {
+    e.preventDefault(); deferredPrompt = e;
+    if (CUR.name === "home") rerender();
+  });
+  W.addEventListener("appinstalled", function () { deferredPrompt = null; if (CUR.name === "home") rerender(); });
+
+  function ttsHelpHtml() {
+    return '<div class="panel tip warn"><h3>🔈 Suara Mandarin Taiwan belum terpasang</h3>' +
+      "<p class=\"small\">Audio tetap jalan, tapi aksen mungkin bukan Taiwan" + (TTS.status() === "none" ? " (atau tidak ada suara Mandarin sama sekali)" : "") + ".</p>" +
+      '<p class="small"><b>Windows:</b> Settings → Time &amp; language → Language &amp; region → tambah 中文(台灣) lalu pasang paket Speech.<br>' +
+      "<b>iPhone/iPad:</b> Settings → Accessibility → Spoken Content → Voices → Chinese (Taiwan) → unduh Meijia.</p></div>";
+  }
+  TTS.onChange(function () { if (CUR.name === "home" || CUR.name === "settings") rerender(); });
+
+  SCREENS.home = function () {
+    var t = today(), dy = day();
+    var dueN = dueList(CARDS).length;
+    var newN = Math.min(newRemaining(), newList(CARDS).length);
+    var learned = CARDS.filter(function (c) { return isLearned(S.srs[c.key]); }).length;
+    var dateStr = "";
+    try { dateStr = new Date().toLocaleDateString("id-ID", { weekday: "long", day: "numeric", month: "long" }); } catch (e) { dateStr = t; }
+    var dl = suggestDialogue();
+    var sd = dy.sessionDone;
+    var h = head("華語 B2", esc(dateStr) + " &nbsp;·&nbsp; 🔥 " + streakNow() + " hari");
+    h += '<div class="stack">';
+    h += '<div class="tiles">' +
+      '<div class="tile"><b>' + dueN + "</b><span>Jatuh tempo hari ini</span></div>" +
+      '<div class="tile"><b>' + newN + "</b><span>Kartu baru tersedia</span></div>" +
+      '<div class="tile"><b>' + learned + "</b><span>Sudah dipelajari</span></div>" +
+      '<div class="tile"><b>🔥 ' + streakNow() + "</b><span>Streak (hari)</span></div></div>";
+
+    function step(n, done, label, sub, act, extra) {
+      return '<li><button type="button" class="step ' + (done ? "done" : "") + '" data-act="' + act + '"' + (extra || "") + '><span class="num">' + (done ? "✓" : n) + '</span><span class="grow"><span class="st">' + label +
+        '</span><br><span class="muted small">' + sub + '</span></span><span aria-hidden="true">›</span></button></li>';
+    }
+    h += '<section class="panel"><h2>Sesi hari ini <span class="muted small">(±15 menit)</span></h2><ol class="steps">' +
+      step(1, sd.cards, "Review kartu", dueN + " jatuh tempo + " + newN + " baru", "home-cards") +
+      step(2, sd.dialogue, "Roleplay 1 skenario", dl ? esc(dl.title_zh + " · " + dl.title_id) : "Belum ada skenario", "home-talk", dl ? ' data-id="' + esc(dl.id) + '"' : "") +
+      step(3, sd.phrases, "5 kalimat percakapan", Math.min(5, dy.phraseRated || 0) + " / 5 hari ini", "home-phr") +
+      "</ol></section>";
+
+    /* per deck progress */
+    h += '<section class="panel"><h2>Progres per dek</h2>';
+    DECKS.forEach(function (d) {
+      var cs = CARDS.filter(function (c) { return c.deck === d.id; });
+      var l = cs.filter(function (c) { return isLearned(S.srs[c.key]); }).length;
+      var m = cs.filter(function (c) { var st = S.srs[c.key]; return st && st.interval >= 21; }).length;
+      h += '<div class="deck-row"><span class="ic" aria-hidden="true">' + esc(d.icon) + '</span><div class="grow"><div class="row between"><span><b>' + esc(d.name) +
+        '</b> <span class="zh muted small">' + esc(d.zh) + '</span></span><span class="small muted">' + (cs.length ? l + " / " + cs.length : "belum ada kartu") + '</span></div>' +
+        '<div class="bar"><i style="width:' + pct(l, cs.length) + '%"></i></div>' + (cs.length ? '<div class="small muted">dikuasai: ' + m + "</div>" : "") + "</div></div>";
+    });
+    h += "</section>";
+
+    if (isIOS() && !isStandalone() && !dismissedInstall && !S.hints.install) {
+      h += '<section class="panel tip"><div class="row between"><b>📲 Pasang di Home Screen</b><button class="btn sm" data-act="hint-install-x">Tutup</button></div>' +
+        '<p class="small mb" style="margin-top:6px">Buka lewat Safari, tap Share ⬆️ → <b>Add to Home Screen</b>. Setelah itu app bisa dipakai offline layaknya aplikasi biasa.</p></section>';
+    } else if (deferredPrompt) {
+      h += '<section class="panel tip row between"><span><b>📲 Pasang aplikasi</b><br><span class="small">Pakai offline dari desktop / layar utama.</span></span><button class="btn primary" data-act="install">Install app</button></section>';
+    }
+    if (TTS.status() !== "tw") h += ttsHelpHtml();
+
+    h += '<section class="panel"><h2>Pindah progres antar-perangkat</h2>' +
+      '<p class="small muted">Progres tersimpan di perangkat ini saja. Salin kode (atau unduh file) lalu impor di perangkat lain.</p>' +
+      '<div class="row wrap"><button class="btn soft" data-act="xfer-copy">📋 Salin kode progres</button><button class="btn" data-act="xfer-download">⬇️ Unduh file .json</button></div>' +
+      '<textarea id="code-out" class="mono mt" readonly hidden aria-label="Kode progres"></textarea>' +
+      '<label class="small muted mt" style="display:block" for="code-in">Tempel kode dari perangkat lain</label>' +
+      '<textarea id="code-in" class="mono" placeholder="MB2G:… atau MB2P:…"></textarea>' +
+      '<div class="row wrap mt"><button class="btn primary" data-act="xfer-import">Impor</button>' +
+      '<label class="btn" style="cursor:pointer">⬆️ Unggah file<input type="file" accept=".json,application/json,text/plain" data-chg="xfer-file" hidden></label></div></section>';
+    h += "</div>";
+    view(h);
+  };
+  ACT["home-cards"] = function () { CS.decks = []; CS.fresh = true; go("#/cards"); };
+  ACT["home-talk"] = function (el) { var id = el.getAttribute("data-id"); go(id ? "#/talk/" + encodeURIComponent(id) : "#/talk"); };
+  ACT["home-phr"] = function () { CS.decks = ["phrases"]; CS.dir = "id2zh"; CS.fresh = true; go("#/cards"); };
+  ACT["hint-install-x"] = function () { dismissedInstall = true; S.hints.install = true; save(); rerender(); };
+  ACT.install = function () {
+    if (!deferredPrompt) return;
+    deferredPrompt.prompt();
+    deferredPrompt.userChoice.then(function () { deferredPrompt = null; if (CUR.name === "home") rerender(); }, function () {});
+  };
+
+  /* ---- progress transfer ---- */
+  function bytesToB64(u8) {
+    var s = "", n = 0x8000;
+    for (var i = 0; i < u8.length; i += n) s += String.fromCharCode.apply(null, u8.subarray(i, i + n));
+    return btoa(s);
+  }
+  function b64ToBytes(b) {
+    var s = atob(b.replace(/\s+/g, "")), u = new Uint8Array(s.length);
+    for (var i = 0; i < s.length; i++) u[i] = s.charCodeAt(i);
+    return u;
+  }
+  function encodeProgress() {
+    var bytes = new TextEncoder().encode(JSON.stringify(S));
+    if (W.CompressionStream && W.Response && W.Blob) {
+      try {
+        var stream = new Blob([bytes]).stream().pipeThrough(new CompressionStream("gzip"));
+        return new Response(stream).arrayBuffer().then(function (buf) { return "MB2G:" + bytesToB64(new Uint8Array(buf)); },
+          function () { return "MB2P:" + bytesToB64(bytes); });
+      } catch (e) {}
+    }
+    return Promise.resolve("MB2P:" + bytesToB64(bytes));
+  }
+  function decodeProgress(code) {
+    code = String(code || "").trim();
+    try {
+      if (code.charAt(0) === "{") return Promise.resolve(JSON.parse(code));
+      if (code.indexOf("MB2P:") === 0) return Promise.resolve(JSON.parse(new TextDecoder().decode(b64ToBytes(code.slice(5)))));
+      if (code.indexOf("MB2G:") === 0) {
+        if (!W.DecompressionStream) return Promise.reject(new Error("Browser ini tidak bisa membuka kode terkompresi (MB2G). Pakai file .json."));
+        var stream = new Blob([b64ToBytes(code.slice(5))]).stream().pipeThrough(new DecompressionStream("gzip"));
+        return new Response(stream).text().then(function (t) { return JSON.parse(t); });
+      }
+    } catch (e) { return Promise.reject(e); }
+    return Promise.reject(new Error("Format kode tidak dikenali."));
+  }
+  function validProgress(o) { return !!o && typeof o === "object" && o.v === 1 && o.srs && typeof o.srs === "object" && o.settings && typeof o.settings === "object"; }
+  function importProgress(code) {
+    decodeProgress(code).then(function (o) {
+      if (!validProgress(o)) throw new Error("Data progres tidak valid.");
+      confirmModal("Ganti progres di perangkat ini?", "Ganti", function () {
+        S = normalizeState(o); save(); applyTheme(); rebuildCards(); CS.fresh = true;
+        toast("Progres berhasil diimpor"); rerender();
+      }, true);
+    }).catch(function (e) { toast("Gagal impor: " + (e && e.message ? e.message : "kode rusak")); });
+  }
+  ACT["xfer-copy"] = function () {
+    encodeProgress().then(function (code) {
+      var ta = $("#code-out");
+      if (ta) { ta.hidden = false; ta.value = code; ta.focus(); ta.select(); }
+      return copyText(code);
+    }).then(function (ok) { toast(ok ? "Kode progres disalin" : "Salin kode dari kotak di bawah"); });
+  };
+  ACT["xfer-import"] = function () {
+    var v = ($("#code-in") || {}).value || "";
+    if (!v.trim()) { toast("Tempel kode dulu"); return; }
+    importProgress(v);
+  };
+  ACT["xfer-download"] = function () {
+    try {
+      var blob = new Blob([JSON.stringify(S)], { type: "application/json" });
+      var url = URL.createObjectURL(blob), a = D.createElement("a");
+      a.href = url; a.download = "mb2-progres-" + today() + ".json";
+      D.body.appendChild(a); a.click(); D.body.removeChild(a);
+      setTimeout(function () { URL.revokeObjectURL(url); }, 4000);
+    } catch (e) { toast("Gagal membuat file"); }
+  };
+  CHG["xfer-file"] = function (el) {
+    var f = el.files && el.files[0];
+    if (!f) return;
+    var r = new FileReader();
+    r.onload = function () { importProgress(String(r.result || "")); };
+    r.onerror = function () { toast("Gagal membaca file"); };
+    r.readAsText(f);
+    el.value = "";
+  };
+
+  /* =========================================================
+   * 6. Cards screen (flashcards, swipe, SRS)
+   * ========================================================= */
+  CS.decks = []; CS.dir = null; CS.queue = null; CS.done = 0; CS.total = 0; CS.flipped = false; CS.extra = 0; CS.fresh = true;
+
+  function buildQueue() {
+    var cs = cardsOf(CS.decks);
+    var due = dueList(cs);
+    var nw = newList(cs).slice(0, newRemaining(CS.extra));
+    CS.queue = due.concat(nw).map(function (c) { return c.key; });
+    CS.done = 0; CS.total = CS.queue.length; CS.flipped = false;
+  }
+
+  SCREENS.cards = function () {
+    if (!CS.dir) CS.dir = S.settings.dir || "zh2id";
+    if (CS.fresh || !CS.queue) { buildQueue(); CS.fresh = false; }
+    var h = head("Kartu", "", undefined);
+    var allOn = !CS.decks.length;
+    var chips = '<button type="button" class="chip ' + (allOn ? "on" : "") + '" data-act="deck-chip" data-d="all">Semua</button>';
+    DECKS.forEach(function (d) {
+      var n = CARDS.filter(function (c) { return c.deck === d.id; }).length;
+      if (!n) return;
+      chips += '<button type="button" class="chip ' + (CS.decks.indexOf(d.id) >= 0 ? "on" : "") + '" data-act="deck-chip" data-d="' + esc(d.id) + '">' + esc(d.icon) + " " + esc(d.name) + "</button>";
+    });
+    h += '<div class="chips mb scroll-x" role="group" aria-label="Pilih dek">' + chips + "</div>";
+    h += '<div class="seg" role="group" aria-label="Arah kartu" style="max-width:560px;margin:0 auto">' +
+      [["zh2id", "中文→Arti"], ["id2zh", "Arti→中文"], ["listen", "🔊→Arti"]].map(function (x) {
+        return '<button type="button" class="' + (CS.dir === x[0] ? "on" : "") + '" data-act="dir" data-v="' + x[0] + '">' + x[1] + "</button>";
+      }).join("") + "</div>";
+    h += '<div id="cardarea"></div>';
+    view(h);
+    drawCard();
+  };
+  ACT["deck-chip"] = function (el) {
+    var d = el.getAttribute("data-d");
+    if (d === "all") CS.decks = [];
+    else {
+      var i = CS.decks.indexOf(d);
+      if (i >= 0) CS.decks.splice(i, 1); else CS.decks.push(d);
+    }
+    if (CS.decks.length === 1 && CS.decks[0] === "phrases") { CS.dir = "id2zh"; S.settings.dir = "id2zh"; }
+    CS.fresh = true; rerender();
+  };
+  ACT.dir = function (el) {
+    CS.dir = el.getAttribute("data-v"); S.settings.dir = CS.dir; save();
+    $$(".seg button").forEach(function (b) { b.classList.toggle("on", b.getAttribute("data-v") === CS.dir); });
+    drawCard();
+  };
+
+  function curCard() { return CS.queue && CS.queue.length ? CARD[CS.queue[0]] : null; }
+
+  function cardFront(c) {
+    var db = deckById(c.deck);
+    var badge = '<span class="badge deck-badge">' + esc(db ? db.icon + " " + db.name : "") + "</span>";
+    var long = Array.from(c.zh).length > 6 ? " long" : "";
+    if (CS.dir === "listen") {
+      return '<div class="face front" aria-label="Sisi depan">' + badge +
+        '<button type="button" class="listen-btn" data-act="speak" data-t="' + esc(c.zh) + '" aria-label="Putar audio">🔊</button>' +
+        '<div class="hint">Dengarkan, lalu ingat artinya</div></div>';
+    }
+    if (CS.dir === "id2zh") {
+      return '<div class="face front">' + badge + '<div class="front-mean">' + esc(c.id_meaning || c.en || "") + "</div>" +
+        (S.settings.showEnglish && c.en ? '<div class="muted">' + esc(c.en) + "</div>" : "") +
+        '<div class="hint">Ucapkan dalam bahasa Mandarin</div></div>';
+    }
+    return '<div class="face front">' + badge + '<div class="big-hanzi' + long + '">' + tcolor(c.zh, c.py) + "</div>" +
+      (S.settings.showPinyin && c.py ? '<div class="muted">' + esc(c.py) + "</div>" : "") +
+      playBtn(c.zh, "ghost") + "</div>";
+  }
+  function cardBack(c) {
+    var long = Array.from(c.zh).length > 6 ? " long" : "";
+    var h = '<div class="face back"><div class="hz' + long + '">' + tcolor(c.zh, c.py) + '</div>';
+    h += '<div class="py">' + esc(c.py || "") + "</div>";
+    h += '<div class="center">' + playBtn(c.zh) + "</div>";
+    var b = "";
+    if (c.pos) b += '<span class="badge">' + esc(c.pos) + "</span>";
+    if (c.level) b += '<span class="badge brand">' + esc(c.level) + "</span>";
+    if (c.register) b += '<span class="badge">' + esc(c.register) + "</span>";
+    if (b) h += '<div class="badges">' + b + "</div>";
+    if (c.id_meaning) h += '<div class="mean">' + esc(c.id_meaning) + "</div>";
+    if (S.settings.showEnglish && c.en) h += '<div class="en">' + esc(c.en) + "</div>";
+    if (c.breakdown) h += '<div class="blk"><h4>Pecah kata</h4>' + esc(c.breakdown) + "</div>";
+    if (c.mnemonic) h += '<div class="blk"><h4>Jembatan ingatan</h4>' + esc(c.mnemonic) + "</div>";
+    if (c.note) h += '<div class="blk"><h4>Catatan</h4>' + esc(c.note) + "</div>";
+    var ex = c.example;
+    if (ex && ex.zh) {
+      var zhHtml = esc(ex.zh).split(esc(c.zh)).join("<mark>" + esc(c.zh) + "</mark>");
+      h += '<div class="blk"><h4>Contoh</h4><div class="row"><div class="grow"><div class="ex-zh">' + zhHtml + "</div>" +
+        (S.settings.showPinyin && ex.py ? '<div class="muted">' + esc(ex.py) + "</div>" : "") +
+        (ex.id ? "<div>" + esc(ex.id) + "</div>" : "") +
+        (S.settings.showEnglish && ex.en ? '<div class="muted small">' + esc(ex.en) + "</div>" : "") +
+        "</div>" + playBtn(ex.zh) + "</div></div>";
+    }
+    return h + "</div>";
+  }
+
+  function drawCard() {
+    var area = $("#cardarea");
+    if (!area) return;
+    if (!CARDS.length) {
+      area.innerHTML = '<div class="celebrate"><div class="big">📭</div><h2>Belum ada kartu</h2><p class="muted">Data kosakata belum termuat. Pastikan folder <code>data/</code> ada.</p></div>';
+      return;
+    }
+    var c = curCard();
+    if (!c) {
+      if (CS.queue && CS.queue.length) { CS.queue.shift(); return drawCard(); }
+      var dy = day();
+      if (!dy.sessionDone.cards) { dy.sessionDone.cards = true; save(); }
+      var more = newList(cardsOf(CS.decks)).length;
+      area.innerHTML = '<div class="celebrate"><div class="big">🎉</div><h2>Selesai untuk sekarang!</h2><p class="muted">' +
+        (CS.done ? "Kamu mereview " + CS.done + " kartu. " : "Tidak ada kartu yang jatuh tempo. ") + 'Lanjutkan besok untuk menjaga streak.</p>' +
+        (more ? '<button type="button" class="btn primary block" data-act="more-new">Belajar kartu baru tambahan (+10)</button>' : "") +
+        '<a class="btn block" href="#/quiz" style="margin-top:10px">Ke kuis</a></div>';
+      return;
+    }
+    CS.flipped = false;
+    var st = stOf(c.key);
+    var h = '<div class="progress-line"><span>' + CS.done + " / " + (CS.done + CS.queue.length) + '</span><div class="bar"><i style="width:' + pct(CS.done, CS.done + CS.queue.length) + '%"></i></div>' +
+      '<span>' + (st ? "review" : "baru") + "</span></div>";
+    h += '<div class="cardwrap" id="cardwrap"><div class="card" id="card" role="button" tabindex="0" aria-label="Balik kartu">' + cardFront(c) + cardBack(c) + "</div></div>";
+    h += '<div class="center hint mt" id="flip-hint">Ketuk kartu atau tekan Spasi untuk membalik · geser kiri = Lagi, kanan = Bisa</div>';
+    h += '<div class="rate-bar" id="ratebar" hidden>' + [["Lagi", 0], ["Sulit", 1], ["Bisa", 2], ["Mudah", 3]].map(function (x) {
+      return '<button type="button" class="r' + x[1] + '" data-act="rate" data-g="' + x[1] + '" aria-label="' + x[0] + '">' + x[0] + "<small>" + SRS.nextIntervalLabel(st, x[1]) + "</small></button>";
+    }).join("") + "</div>";
+    area.innerHTML = h;
+    var backFace = $(".face.back", area);
+    if (backFace) backFace.setAttribute("aria-hidden", "true");
+    bindCard();
+    if (CS.dir === "listen" && CS.tapped) TTS.speak(c.zh, { rate: S.settings.rate });
+  }
+  ACT["more-new"] = function () { CS.extra += 10; buildQueue(); drawCard(); };
+
+  function flip() {
+    var card = $("#card"), rb = $("#ratebar");
+    if (!card) return;
+    CS.flipped = !CS.flipped;
+    var flipped = CS.flipped;
+    var still = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (still) card.classList.toggle("flipped", flipped);
+    else {
+      card.classList.remove("flipping"); void card.offsetWidth; card.classList.add("flipping");
+      setTimeout(function () { card.classList.toggle("flipped", flipped); }, 170);
+      setTimeout(function () { card.classList.remove("flipping"); }, 360);
+    }
+    if (rb) rb.hidden = !CS.flipped;
+    var fh = $("#flip-hint"); if (fh) fh.hidden = CS.flipped;
+    var f = $(".face.front", card), b = $(".face.back", card);
+    if (f) f.setAttribute("aria-hidden", CS.flipped ? "true" : "false");
+    if (b) b.setAttribute("aria-hidden", CS.flipped ? "false" : "true");
+    if (CS.flipped && CS.dir === "id2zh") { var c = curCard(); if (c && CS.tapped) TTS.speak(c.zh, { rate: S.settings.rate }); }
+  }
+
+  function bindCard() {
+    var w = $("#cardwrap");
+    if (!w) return;
+    var sx = 0, sy = 0, dx = 0, drag = false, active = false, pid = null;
+    function reset() {
+      w.classList.add("snap"); w.style.transform = "";
+      setTimeout(function () { w.classList.remove("snap"); }, 260);
+    }
+    w.addEventListener("pointerdown", function (e) {
+      if (e.target.closest("[data-act]")) return;
+      if (e.pointerType === "mouse" && e.button !== 0) return;
+      active = true; drag = false; dx = 0; pid = e.pointerId; sx = e.clientX; sy = e.clientY;
+    });
+    w.addEventListener("pointermove", function (e) {
+      if (!active || e.pointerId !== pid) return;
+      dx = e.clientX - sx;
+      var dy = e.clientY - sy;
+      if (!drag && Math.abs(dx) > 10 && Math.abs(dx) > Math.abs(dy)) {
+        drag = true; w.classList.add("dragging");
+        try { w.setPointerCapture(pid); } catch (err) {}
+      }
+      if (drag) {
+        w.style.transform = "translateX(" + dx + "px) rotate(" + (dx / 25) + "deg)";
+        w.classList.toggle("tint-r", dx > 45 && CS.flipped);
+        w.classList.toggle("tint-l", dx < -45 && CS.flipped);
+      }
+    });
+    function end(e) {
+      if (!active || e.pointerId !== pid) return;
+      active = false;
+      w.classList.remove("dragging", "tint-l", "tint-r");
+      if (drag) {
+        drag = false;
+        if (e.type === "pointerup" && Math.abs(dx) > 90) {
+          if (!CS.flipped) { reset(); flip(); }
+          else { w.style.transform = ""; rateCurrent(dx > 0 ? 2 : 0); }
+        } else reset();
+      } else if (e.type === "pointerup") flip();
+    }
+    w.addEventListener("pointerup", end);
+    w.addEventListener("pointercancel", end);
+    $("#card").addEventListener("keydown", function (e) { if (e.key === "Enter") { e.preventDefault(); flip(); } });
+  }
+
+  function rateCurrent(g) {
+    var key = CS.queue && CS.queue[0];
+    if (!key || !CARD[key]) return;
+    CS.queue.shift();
+    var old = S.srs[key], isNew = !old;
+    S.srs[key] = SRS.rate(old, g);
+    var dy = day();
+    dy.reviewed++; if (isNew) dy.newSeen++;
+    if (CARD[key].kind === "phrase") {
+      dy.phraseRated = (dy.phraseRated || 0) + 1;
+      if (dy.phraseRated >= 5) dy.sessionDone.phrases = true;
+    }
+    bumpStreak();
+    if (g === 0) CS.queue.splice(Math.min(4, CS.queue.length), 0, key); else CS.done++;
+    if (!CS.queue.length) dy.sessionDone.cards = true;
+    pruneDaily(); save();
+    drawCard();
+  }
+  ACT.rate = function (el) { if (CS.flipped) rateCurrent(+el.getAttribute("data-g")); };
+  function cardsKey(e) {
+    var k = e.key;
+    if (k === " " || k === "Spacebar") { if (curCard()) { e.preventDefault(); flip(); } return; }
+    if (k === "p" || k === "P") { var c = curCard(); if (c) TTS.speak(c.zh, { rate: S.settings.rate }); return; }
+    if (!CS.flipped) return;
+    if (k === "1" || k === "ArrowLeft") rateCurrent(0);
+    else if (k === "2") rateCurrent(1);
+    else if (k === "3" || k === "ArrowRight") rateCurrent(2);
+    else if (k === "4") rateCurrent(3);
+  }
+
+  /* =========================================================
+   * 7. Grammar
+   * ========================================================= */
+  var GL = { q: "", lvl: "", weak: false }, GA = { id: null, ans: {} }, MX = null;
+  function grammarList() { return arr(W.GRAMMAR).filter(function (g) { return g && g.id; }); }
+  function gById(id) { var l = grammarList(); for (var i = 0; i < l.length; i++) if (l[i].id === id) return l[i]; return null; }
+  function gDot(id) {
+    var r = S.grammar[id];
+    if (!r || !(r.right + r.wrong)) return '<span class="dot" title="Belum dilatih"></span>';
+    var ratio = r.right / (r.right + r.wrong);
+    return '<span class="dot ' + (ratio >= 0.75 ? "good" : ratio >= 0.5 ? "warn" : "bad") + '" title="Benar ' + r.right + ", salah " + r.wrong + '"></span>';
+  }
+  function gGist(g) {
+    var t = String(g.id_explain || "");
+    var mm = /^[\s\S]*?[.!?](?:\s|$)/.exec(t);
+    var m = mm ? mm[0].trim() : t;
+    return m.length > 100 ? m.slice(0, 98) + "…" : m;
+  }
+  function gRows() {
+    var q = GL.q.trim().toLowerCase();
+    var list = grammarList().filter(function (g) {
+      if (GL.lvl && g.level !== GL.lvl) return false;
+      if (!q) return true;
+      return [g.pattern, g.py, g.structure, g.id_explain, g.en_explain].join(" ").toLowerCase().indexOf(q) >= 0;
+    });
+    if (!list.length) return '<div class="panel center muted">' + (grammarList().length ? "Tidak ada pola yang cocok." : "Data grammar belum tersedia.") + "</div>";
+    return list.map(function (g) {
+      return '<a class="g-row" href="#/grammar/' + encodeURIComponent(g.id) + '">' + gDot(g.id) + '<div class="grow"><div class="g-pattern">' + esc(g.pattern) +
+        ' <span class="badge">' + esc(g.level || "") + '</span></div><div class="small muted">' + esc(gGist(g)) + '</div></div><span aria-hidden="true">›</span></a>';
+    }).join("");
+  }
+
+  SCREENS.grammar = function (args) {
+    if (args[0] === "mix") return mixScreen();
+    if (args[0]) return grammarDetail(args[0]);
+    var n = grammarList().length;
+    var h = head("Grammar", n + " pola B1–B2");
+    h += '<div class="stack"><input type="search" id="gsearch" data-inp="gsearch" placeholder="Cari pola / arti…" value="' + esc(GL.q) + '" aria-label="Cari grammar">';
+    h += '<div class="row wrap"><div class="chips">' + [["", "Semua"], ["B1", "B1"], ["B2", "B2"]].map(function (x) {
+      return '<button type="button" class="chip small ' + (GL.lvl === x[0] ? "on" : "") + '" data-act="glvl" data-v="' + x[0] + '">' + x[1] + "</button>";
+    }).join("") + '</div><span class="grow"></span></div>';
+    h += '<div class="panel row between wrap"><div><b>Latihan campuran</b><div class="small muted">10 soal cloze dari berbagai pola</div></div>' +
+      '<div class="row wrap"><label class="check small"><input type="checkbox" data-chg="gweak" ' + (GL.weak ? "checked" : "") + '> Fokus yang lemah</label>' +
+      '<button type="button" class="btn primary" data-act="gmix-start"' + (n ? "" : " disabled") + ">Mulai</button></div></div>";
+    h += '<div id="gl-list">' + gRows() + "</div></div>";
+    view(h);
+  };
+  CHG.gsearch = function (el) { GL.q = el.value; var l = $("#gl-list"); if (l) l.innerHTML = gRows(); };
+  CHG.gweak = function (el) { GL.weak = el.checked; };
+  ACT.glvl = function (el) { GL.lvl = el.getAttribute("data-v"); rerender(); };
+
+  function clozeHtml(q) { return esc(q).split("___").join('<span class="gap"></span>'); }
+  function quizBlock(g, qi, chosen, opts, act, extraAttr) {
+    var q = g.quiz[qi], answered = chosen != null;
+    var h = '<div class="cloze-q">' + clozeHtml(q.q) + '</div><div class="opts two">';
+    opts.forEach(function (o) {
+      var cls = "opt";
+      if (answered) { if (o === q.answer) cls += " correct"; else if (o === chosen) cls += " wrong"; }
+      h += '<button type="button" class="' + cls + '" ' + (answered ? "disabled" : "") + ' data-act="' + act + '" data-g="' + esc(g.id) + '" data-qi="' + qi + '" data-v="' + esc(o) + '"' + (extraAttr || "") + ">" + esc(o) + "</button>";
+    });
+    h += "</div>";
+    if (answered) {
+      var filled = String(q.q).replace("___", q.answer);
+      h += '<div class="feedback"><b>' + (chosen === q.answer ? "✅ Benar!" : "❌ Kurang tepat") + "</b> " + esc(q.explain || "") +
+        '<div class="row mt"><div class="grow ex-zh">' + esc(filled) + "</div>" + playBtn(filled) + "</div></div>";
+    }
+    return h;
+  }
+  function recordG(id, ok) {
+    var r = S.grammar[id] || (S.grammar[id] = { right: 0, wrong: 0 });
+    if (ok) r.right++; else r.wrong++;
+    save();
+  }
+
+  function grammarDetail(id) {
+    var g = gById(id);
+    if (!g) { view(head("Grammar", "") + '<div class="panel center"><p>Pola tidak ditemukan.</p><a class="btn" href="#/grammar">Kembali</a></div>'); return; }
+    if (GA.id !== id) GA = { id: id, ans: {} };
+    var h = '<header class="screen-head"><a class="btn sm" href="#/grammar" aria-label="Kembali">‹ Grammar</a><span class="badge brand">' + esc(g.level || "") + "</span></header><div class=\"stack\">";
+    h += '<section class="panel center"><div class="big-hanzi long">' + esc(g.pattern) + '</div><div class="muted">' + esc(g.py || "") + "</div>" +
+      '<p class="mt"><span class="formula">' + esc(g.structure || "") + "</span></p></section>";
+    h += '<section class="panel"><h2>Penjelasan</h2><p>' + esc(g.id_explain || "") + "</p>" + (S.settings.showEnglish && g.en_explain ? '<p class="muted">' + esc(g.en_explain) + "</p>" : "") + "</section>";
+    var exs = arr(g.examples);
+    if (exs.length) {
+      h += '<section class="panel"><h2>Contoh</h2>' + exs.map(function (e) {
+        return '<div class="example row"><div class="grow"><div class="ex-zh">' + esc(e.zh) + "</div>" + (S.settings.showPinyin && e.py ? '<div class="muted small">' + esc(e.py) + "</div>" : "") +
+          "<div>" + esc(e.id || "") + "</div></div>" + playBtn(e.zh) + "</div>";
+      }).join("") + "</section>";
+    }
+    if (g.mistake) {
+      h += '<section class="panel mistake"><h2>Kesalahan umum</h2><p>❌ <span class="wrong ex-zh">' + esc(g.mistake.wrong) + '</span></p><p>✅ <span class="right ex-zh">' + esc(g.mistake.right) + "</span></p>" +
+        '<p class="muted small">' + esc(g.mistake.note || "") + "</p></section>";
+    }
+    var qs = arr(g.quiz);
+    if (qs.length) {
+      h += '<section class="panel"><h2>Latihan</h2>';
+      qs.forEach(function (q, qi) {
+        h += (qi ? '<hr style="border:0;border-top:1px solid var(--border);margin:16px 0">' : "") + quizBlock(g, qi, GA.ans[qi], arr(q.options), "g-ans");
+      });
+      h += "</section>";
+    }
+    h += "</div>";
+    view(h);
+  }
+  ACT["g-ans"] = function (el) {
+    var g = gById(el.getAttribute("data-g")), qi = +el.getAttribute("data-qi"), v = el.getAttribute("data-v");
+    if (!g || !g.quiz[qi]) return;
+    if (el.hasAttribute("data-mix")) { mixAnswer(g, qi, v); return; }
+    if (GA.ans[qi] != null) return;
+    GA.ans[qi] = v;
+    recordG(g.id, v === g.quiz[qi].answer);
+    rerender();
+  };
+
+  /* ---- mixed practice ---- */
+  ACT["gmix-start"] = function () {
+    var items = [];
+    var gs = grammarList().filter(function (g) { return arr(g.quiz).length; });
+    if (GL.weak) {
+      var weak = gs.filter(function (g) { var r = S.grammar[g.id]; return !r || r.wrong >= r.right; });
+      if (weak.length >= 3) gs = weak;
+    }
+    gs.forEach(function (g) { g.quiz.forEach(function (q, qi) { items.push({ gid: g.id, qi: qi, opts: shuffle(arr(q.options)) }); }); });
+    items = shuffle(items).slice(0, 10);
+    if (!items.length) { toast("Belum ada soal"); return; }
+    MX = { items: items, i: 0, score: 0, chosen: null, miss: [] };
+    go("#/grammar/mix");
+  };
+  function mixScreen() {
+    if (!MX) { go("#/grammar"); return; }
+    var h = '<header class="screen-head"><a class="btn sm" href="#/grammar">‹ Keluar</a><span class="muted">Latihan campuran</span></header>';
+    if (MX.i >= MX.items.length) {
+      h += '<div class="panel center stack"><div class="big" style="font-size:3rem">' + (MX.score >= MX.items.length * 0.8 ? "🎉" : "💪") + "</div><h2>Skor: " + MX.score + " / " + MX.items.length + "</h2>";
+      if (MX.miss.length) {
+        h += '<div style="text-align:left"><b>Pola yang perlu diulang</b>' + MX.miss.map(function (id) {
+          var g = gById(id);
+          return g ? '<a class="g-row" href="#/grammar/' + encodeURIComponent(id) + '"><div class="grow g-pattern">' + esc(g.pattern) + "</div><span>›</span></a>" : "";
+        }).join("") + "</div>";
+      } else h += "<p>Sempurna, tidak ada yang perlu diulang!</p>";
+      h += '<button type="button" class="btn primary block" data-act="gmix-start">Main lagi</button></div>';
+      view(h); return;
+    }
+    var it = MX.items[MX.i], g = gById(it.gid);
+    h += '<div class="progress-line" style="margin-top:0"><span>' + (MX.i + 1) + " / " + MX.items.length + '</span><div class="bar"><i style="width:' + pct(MX.i, MX.items.length) + '%"></i></div></div>';
+    h += '<section class="panel mt">' + quizBlock(g, it.qi, MX.chosen, it.opts, "g-ans", " data-mix=\"1\"");
+    if (MX.chosen != null) h += '<button type="button" class="btn primary block mt" data-act="gmix-next">' + (MX.i + 1 >= MX.items.length ? "Lihat skor" : "Lanjut") + "</button>";
+    h += "</section>";
+    view(h);
+  }
+  function mixAnswer(g, qi, v) {
+    if (MX.chosen != null) return;
+    MX.chosen = v;
+    var ok = v === g.quiz[qi].answer;
+    if (ok) MX.score++; else if (MX.miss.indexOf(g.id) < 0) MX.miss.push(g.id);
+    recordG(g.id, ok);
+    mixScreen();
+  }
+  ACT["gmix-next"] = function () { MX.i++; MX.chosen = null; mixScreen(); W.scrollTo(0, 0); };
+
+  /* =========================================================
+   * 8. Talk (Percakapan): list, read, roleplay, shadowing, Claude
+   * ========================================================= */
+  var TK = { id: null, mode: "read", py: null, tr: true, rate: 0.85, claudePy: true };
+  var RP = null, SH = { i: 0, auto: false, tok: 0, timer: null }, PLAYING = false;
+
+  function dlById(id) { var l = arr(W.DIALOGUES); for (var i = 0; i < l.length; i++) if (l[i] && l[i].id === id) return l[i]; return null; }
+  function learnerTurns(d) { return arr(d.lines).filter(function (l) { return l.who === d.learner; }); }
+  function ftById(id) { var l = arr(W.FREE_TALK_TOPICS); for (var i = 0; i < l.length; i++) if (l[i].id === id) return l[i]; return null; }
+
+  /* ---- Claude panel (shared by dialogues and free talk) ---- */
+  function promptFor(ctx) {
+    var p = String(ctx || "").split(":"), pid = p.slice(1).join(":");
+    var o = { pinyin: TK.claudePy };
+    try {
+      if (p[0] === "dl" && dlById(pid) && W.buildClaudePrompt) return W.buildClaudePrompt(dlById(pid), o);
+      if (p[0] === "ft" && ftById(pid) && W.buildFreeTalkPrompt) return W.buildFreeTalkPrompt(ftById(pid), o);
+    } catch (e) {}
+    return "";
+  }
+  function claudePanel(ctx, role) {
+    return '<div class="claude-panel stack" data-ctx="' + esc(ctx) + '">' +
+      '<p>Pakai akun Claude-mu sendiri. Prompt di bawah berisi skenario ini + aturan koreksi. Claude akan memerankan ' + esc(role || "lawan bicaramu") + " dan mengoreksi setiap jawabanmu.</p>" +
+      '<label class="check"><input type="checkbox" data-chg="claude-py" ' + (TK.claudePy ? "checked" : "") + "> Claude menulis pinyin</label>" +
+      '<div class="row wrap"><button type="button" class="btn primary" data-act="claude-open">📋 Salin prompt &amp; buka Claude</button>' +
+      '<button type="button" class="btn" data-act="claude-view">👀 Lihat prompt</button></div>' +
+      '<div class="tip small"><b>Tips menjawab:</b><br>• iPhone/iPad: tambah keyboard 中文(台灣)–拼音 atau 注音, lalu tekan 🎤 di keyboard untuk dikte.<br>• Windows: tekan <b>Win+H</b> untuk dikte suara (pilih bahasa Mandarin Taiwan).<br>• Ucapkan jawabanmu, jangan hanya mengetik.</div>' +
+      '<div><h3>Impor kartu dari Claude</h3><p class="small muted">Di akhir sesi Claude memberi blok 【KARTU】. Tempel di sini (format: 中文 | pinyin | arti).</p>' +
+      '<textarea class="imp" placeholder="【KARTU】&#10;我這邊沒問題 | wǒ zhèbiān méi wèntí | Dari sisi saya tidak ada masalah&#10;【/KARTU】" aria-label="Tempel kartu"></textarea>' +
+      '<button type="button" class="btn soft mt" data-act="import-cards">Tambahkan ke dek \'Dari Claude\'</button></div></div>';
+  }
+  CHG["claude-py"] = function (el) { TK.claudePy = el.checked; $$('[data-chg="claude-py"]').forEach(function (x) { x.checked = TK.claudePy; }); };
+  ACT["claude-open"] = function (el) {
+    var ctx = el.closest(".claude-panel").getAttribute("data-ctx"), p = promptFor(ctx);
+    if (!p) { toast("Prompt belum tersedia"); return; }
+    var pr = copyText(p);
+    try { W.open("https://claude.ai/new?q=" + encodeURIComponent(p), "_blank"); } catch (e) {}
+    pr.then(function (ok) { toast(ok ? "Prompt disalin — kalau belum terisi otomatis, tempel di chat baru" : "Gagal menyalin — pakai 'Lihat prompt'"); });
+  };
+  ACT["claude-view"] = function (el) {
+    var ctx = el.closest(".claude-panel").getAttribute("data-ctx"), p = promptFor(ctx);
+    openModal("<h2>Prompt untuk Claude</h2><textarea id=\"prompt-view\" class=\"mono\" readonly style=\"min-height:280px\">" + esc(p) + "</textarea>" +
+      '<div class="actions"><button type="button" class="btn" data-act="modal-close">Tutup</button><button type="button" class="btn primary" data-act="copy" data-from="#prompt-view">Salin</button></div>');
+  };
+  ACT["ft-open"] = function (el) {
+    var t = ftById(el.getAttribute("data-id"));
+    if (!t) return;
+    openModal("<h2>" + esc(t.icon) + " " + esc(t.zh) + '</h2><p class="muted small">' + esc(t.name) + " — " + esc(t.goal_id) + "</p>" + claudePanel("ft:" + t.id, t.ai_role.split(",")[0]) +
+      '<div class="actions"><button type="button" class="btn" data-act="modal-close">Tutup</button></div>', { sheet: true });
+  };
+
+  function parseCards(text) {
+    var m = /【KARTU】([\s\S]*?)【\/KARTU】/.exec(text), body = m ? m[1] : text, out = [];
+    String(body).split(/\r?\n/).forEach(function (raw) {
+      var line = raw.replace(/\*\*/g, "").replace(/`/g, "").trim();
+      line = line.replace(/^(?:[-*•·]|\d+[.)、])\s*/, "").replace(/^[|｜]\s*/, "").replace(/\s*[|｜]$/, "");
+      if (/^[-:|｜\s]+$/.test(line)) return;
+      var parts = line.split(/[|｜]/).map(function (x) { return x.trim(); });
+      if (parts.length < 2 || !parts[0] || !hasCJK(parts[0])) return;
+      var zh = parts[0], py = "", mean = "";
+      if (parts.length >= 3) { py = parts[1]; mean = parts.slice(2).join(" | "); }
+      else if (!hasCJK(parts[1]) && /[āáǎàēéěèīíǐìōóǒòūúǔùǖǘǚǜü]/i.test(parts[1])) py = parts[1];
+      else mean = parts[1];
+      out.push({ zh: zh, py: py, id_meaning: mean });
+    });
+    return out;
+  }
+  ACT["import-cards"] = function (el) {
+    var ta = el.closest(".claude-panel").querySelector("textarea.imp");
+    var found = parseCards(ta ? ta.value : "");
+    var seen = {}, n = 0;
+    S.custom.forEach(function (c) { seen[c.zh] = true; });
+    found.forEach(function (c) {
+      if (seen[c.zh]) return;
+      seen[c.zh] = true; n++;
+      S.custom.push({ id: "c-" + Date.now().toString(36) + "-" + n, zh: c.zh, py: c.py, id_meaning: c.id_meaning, created: Date.now() });
+    });
+    if (n) { save(); rebuildCards(); CS.fresh = true; if (ta) ta.value = ""; }
+    toast(n ? n + " kartu ditambahkan" : (found.length ? "Semua kartu sudah ada" : "Tidak ada kartu yang terbaca — cek format"));
+  };
+
+  /* ---- list ---- */
+  function talkList() {
+    var h = head("Percakapan", "Latihan bicara — kelemahan utama? Mulai dari sini.");
+    h += '<div class="stack"><section class="panel"><h2>🤖 Free talk dengan Claude</h2><p class="small muted">Pilih topik, lalu ngobrol bebas dengan Claude memakai akunmu sendiri.</p><div class="chips">';
+    arr(W.FREE_TALK_TOPICS).forEach(function (t) {
+      h += '<button type="button" class="chip" data-act="ft-open" data-id="' + esc(t.id) + '">' + esc(t.icon) + " " + esc(t.zh) + "</button>";
+    });
+    h += "</div></section>";
+    var ds = arr(W.DIALOGUES);
+    h += '<section><h2 style="margin-bottom:10px;font-size:1.05rem">Skenario kerja</h2>';
+    if (!ds.length) h += '<div class="panel center muted">Skenario dialog belum tersedia.</div>';
+    ds.forEach(function (d) {
+      var done = S.dialogues[d.id] && S.dialogues[d.id].done;
+      h += '<a class="d-card" href="#/talk/' + encodeURIComponent(d.id) + '"><div class="grow"><div class="zh">' + esc(d.title_zh) + '</div><div class="small muted">' + esc(d.title_id) +
+        " · " + arr(d.lines).length + " baris, " + learnerTurns(d).length + ' giliranmu</div></div>' + (done ? '<span class="badge good">✅ selesai</span>' : "") + "<span aria-hidden=\"true\">›</span></a>";
+    });
+    h += "</section></div>";
+    view(h);
+  }
+
+  /* ---- detail ---- */
+  SCREENS.talk = function (args) {
+    if (!args[0]) { talkList(); return; }
+    var d = dlById(args[0]);
+    if (!d) { view(head("Percakapan", "") + '<div class="panel center"><p>Skenario tidak ditemukan.</p><a class="btn" href="#/talk">Kembali</a></div>'); return; }
+    if (TK.id !== d.id) { TK.id = d.id; TK.mode = "read"; RP = null; SH = { i: 0, auto: false, tok: 0, timer: null }; }
+    if (TK.py == null) TK.py = S.settings.showPinyin;
+    onLeave(function () { shStop(); PLAYING = false; });
+
+    var wide = W.matchMedia && W.matchMedia("(min-width: 1100px)").matches;
+    var gOf = function (pat) { var l = grammarList(); for (var i = 0; i < l.length; i++) if (l[i].pattern === pat) return l[i]; return null; };
+    var info = '<details class="panel info side mb" ' + (wide ? "open" : "") + "><summary><b>Situasi &amp; target</b></summary>" +
+      '<p class="mt">' + esc(d.setting_id) + '</p><p><b>Tujuan:</b> ' + esc(d.goal_id) + "</p>";
+    if (arr(d.vocab).length) {
+      info += '<h3>Kosakata</h3><div class="chips vocab-chips">' + d.vocab.map(function (z) {
+        return '<button type="button" class="chip small" data-act="vocab-sheet" data-z="' + esc(z) + '">' + esc(z) + "</button>";
+      }).join("") + "</div>";
+    }
+    if (arr(d.grammar).length) {
+      info += '<h3 class="mt">Grammar</h3><div class="chips vocab-chips">' + d.grammar.map(function (p) {
+        var g = gOf(p);
+        return g ? '<a class="chip small" href="#/grammar/' + encodeURIComponent(g.id) + '">' + esc(p) + "</a>" : '<span class="chip small">' + esc(p) + "</span>";
+      }).join("") + "</div>";
+    }
+    info += "</details>";
+
+    var h = '<header class="screen-head"><div><a class="btn sm" href="#/talk">‹ Percakapan</a></div></header>';
+    h += '<div class="mb"><h1 class="zh" style="font-size:1.6rem">' + esc(d.title_zh) + '</h1><div class="muted">' + esc(d.title_id) + (d.title_en ? " · " + esc(d.title_en) : "") + "</div></div>";
+    h += '<div class="seg mb" role="tablist" aria-label="Mode latihan">' + [["read", "📖 Dengar &amp; Baca"], ["role", "🎭 Roleplay"], ["shadow", "🔁 Shadowing"], ["claude", "🤖 Claude"]].map(function (x) {
+      return '<button type="button" role="tab" class="' + (TK.mode === x[0] ? "on" : "") + '" data-act="tmode" data-v="' + x[0] + '">' + x[1] + "</button>";
+    }).join("") + "</div>";
+    var main;
+    if (TK.mode === "role") main = roleHtml(d);
+    else if (TK.mode === "shadow") main = shadowHtml(d);
+    else if (TK.mode === "claude") main = '<section class="panel"><h2>🤖 Latihan dengan Claude</h2>' + claudePanel("dl:" + d.id, (d.ai_role || "").split(",")[0]) + "</section>";
+    else main = readHtml(d);
+    // info (situasi & target) duluan di DOM: di HP/iPad portrait tampil di atas; di layar lebar dipindah ke kolom kanan lewat grid
+    h += '<div class="two-col">' + info + '<div class="main stack">' + main + "</div></div>";
+    view(h);
+    if (TK.mode === "shadow") shDraw(d);
+  };
+  ACT.tmode = function (el) {
+    shStop(); PLAYING = false;
+    TK.mode = el.getAttribute("data-v");
+    if (TK.mode === "role" && !RP) { var d = dlById(TK.id); if (d) rpStart(d, false); }
+    rerender();
+  };
+  ACT["vocab-sheet"] = function (el) {
+    var z = el.getAttribute("data-z"), c = findByZh(z);
+    var h;
+    if (c) {
+      h = '<div class="center"><div class="big-hanzi long">' + tcolor(c.zh, c.py) + '</div><div class="muted">' + esc(c.py || "") + "</div>" + playBtn(c.zh) +
+        '<p class="mean mt"><b>' + esc(c.id_meaning || "") + "</b></p>" + (c.en ? '<p class="muted">' + esc(c.en) + "</p>" : "") + "</div>" +
+        '<div class="actions"><button type="button" class="btn" data-act="modal-close">Tutup</button>' +
+        (S.srs[c.key] ? '<button type="button" class="btn" data-act="to-review" data-k="' + esc(c.key) + '">Jadwalkan ulang hari ini</button>' : '<button type="button" class="btn primary" data-act="to-review" data-k="' + esc(c.key) + '">Tambah ke review</button>') + "</div>";
+    } else {
+      h = '<div class="center"><div class="big-hanzi long">' + esc(z) + "</div>" + playBtn(z) + '<p class="muted mt">Kata ini belum ada di dek kartu.</p></div><div class="actions"><button type="button" class="btn" data-act="modal-close">Tutup</button></div>';
+    }
+    openModal(h, { sheet: true });
+  };
+  ACT["to-review"] = function (el) {
+    var k = el.getAttribute("data-k");
+    if (!CARD[k]) return;
+    var st = S.srs[k] || SRS.fresh();
+    st.due = today(); S.srs[k] = st; save(); CS.fresh = true; closeModal(); toast("Masuk antrean review");
+  };
+
+  /* ---- bubbles ---- */
+  function bubbleHtml(d, l, i) {
+    var role = d.roles && d.roles[l.who] ? d.roles[l.who] : { zh: l.who, id: "" };
+    var me = l.who === d.learner;
+    return '<div class="bubble ' + (me ? "me" : "A") + '" data-i="' + i + '"><div class="row"><div class="grow"><div class="who">' + esc(role.zh) + "</div>" +
+      '<div class="b-zh">' + esc(l.zh) + '</div><div class="b-py">' + esc(l.py || "") + '</div><div class="b-id">' + esc(l.id || "") + "</div></div>" +
+      playBtn(l.zh, "sm").replace('data-act="speak"', 'data-act="speak" data-r="' + TK.rate + '"') + "</div></div>";
+  }
+  function flagsClass() { return (TK.py ? "" : " hide-py") + (TK.tr ? "" : " hide-tr"); }
+  function toggleChips() {
+    return '<div class="chips"><button type="button" class="chip small ' + (TK.py ? "on" : "") + '" data-act="tk-py">Pinyin</button>' +
+      '<button type="button" class="chip small ' + (TK.tr ? "on" : "") + '" data-act="tk-tr">Terjemahan</button></div>';
+  }
+  ACT["tk-py"] = function (el) { TK.py = !TK.py; el.classList.toggle("on", TK.py); var b = $(".bubbles"); if (b) b.classList.toggle("hide-py", !TK.py); var s = $("#sh-area"); if (s) shDrawCur(); };
+  ACT["tk-tr"] = function (el) { TK.tr = !TK.tr; el.classList.toggle("on", TK.tr); var b = $(".bubbles"); if (b) b.classList.toggle("hide-tr", !TK.tr); var s = $("#sh-area"); if (s) shDrawCur(); };
+  ACT["tk-rate"] = function (el) {
+    TK.rate = +el.getAttribute("data-v");
+    $$('[data-act="tk-rate"]').forEach(function (b) { b.classList.toggle("on", +b.getAttribute("data-v") === TK.rate); });
+    $$(".bubble [data-act=\"speak\"]").forEach(function (b) { b.setAttribute("data-r", TK.rate); });
+  };
+  function rateSeg() {
+    return '<div class="seg" style="max-width:260px" role="group" aria-label="Kecepatan">' + [0.7, 0.85, 1].map(function (r) {
+      return '<button type="button" class="' + (TK.rate === r ? "on" : "") + '" data-act="tk-rate" data-v="' + r + '">' + r + "×</button>";
+    }).join("") + "</div>";
+  }
+
+  /* ---- a) read & listen ---- */
+  function readHtml(d) {
+    var h = '<section class="panel stack"><div class="row between wrap">' + toggleChips() + rateSeg() + "</div>" +
+      '<button type="button" class="btn primary" id="playall" data-act="play-all">▶ Putar semua</button></section>';
+    h += '<div class="bubbles' + flagsClass() + '">' + arr(d.lines).map(function (l, i) { return bubbleHtml(d, l, i); }).join("") + "</div>";
+    return h;
+  }
+  ACT["play-all"] = function () {
+    var d = dlById(TK.id), btn = $("#playall");
+    if (!d) return;
+    if (PLAYING) { TTS.stop(); PLAYING = false; if (btn) btn.textContent = "▶ Putar semua"; $$(".bubble.playing").forEach(function (b) { b.classList.remove("playing"); }); return; }
+    PLAYING = true; if (btn) btn.textContent = "■ Stop";
+    TTS.speakSeq(arr(d.lines).map(function (l) { return l.zh; }), {
+      rate: TK.rate, gapMs: 450,
+      onItem: function (i) {
+        $$(".bubble.playing").forEach(function (b) { b.classList.remove("playing"); });
+        var b = $('.bubble[data-i="' + i + '"]');
+        if (b) { b.classList.add("playing"); try { b.scrollIntoView({ block: "center", behavior: "smooth" }); } catch (e) {} }
+      },
+      onDone: function () {
+        PLAYING = false; var bt = $("#playall"); if (bt) bt.textContent = "▶ Putar semua";
+        $$(".bubble.playing").forEach(function (b) { b.classList.remove("playing"); });
+      }
+    });
+  };
+
+  /* ---- b) roleplay ---- */
+  function similarity(text, line) {
+    var a = plain(text), best = 0;
+    if (!a) return 0;
+    [line.zh].concat(arr(line.alts).map(function (x) { return x.zh; })).forEach(function (t) {
+      var p = plain(t);
+      if (!p.length) return;
+      var prev = [], cur, i, j;
+      for (j = 0; j <= p.length; j++) prev.push(0);
+      for (i = 1; i <= a.length; i++) {
+        cur = [0];
+        for (j = 1; j <= p.length; j++) cur[j] = a.charAt(i - 1) === p.charAt(j - 1) ? prev[j - 1] + 1 : Math.max(prev[j], cur[j - 1]);
+        prev = cur;
+      }
+      best = Math.max(best, prev[p.length] / p.length);
+    });
+    return Math.round(best * 100);
+  }
+  function rpStart(d, speak) {
+    RP = { id: d.id, shown: [], i: 0, cur: null, marks: {}, done: false };
+    rpAdvance(d, speak);
+  }
+  function rpAdvance(d, speak) {
+    var spoken = [], lines = arr(d.lines);
+    while (RP.i < lines.length && lines[RP.i].who !== d.learner) { RP.shown.push(RP.i); spoken.push(lines[RP.i].zh); RP.i++; }
+    if (RP.i >= lines.length) {
+      RP.done = true; RP.cur = null;
+      var turns = learnerTurns(d).length, good = Object.keys(RP.marks).filter(function (k) { return RP.marks[k]; }).length;
+      var rec = S.dialogues[d.id] || { done: false, best: 0 };
+      rec.done = true; rec.best = Math.max(rec.best || 0, pct(good, turns));
+      S.dialogues[d.id] = rec; day().sessionDone.dialogue = true; save();
+    } else {
+      RP.cur = { idx: RP.i, revealed: false, easy: false, picked: null, opts: null, text: "" };
+    }
+    if (speak && spoken.length) TTS.speakSeq(spoken, { rate: TK.rate, gapMs: 350 });
+  }
+  function answerCard(line, text, easy) {
+    var h = '<div class="answer-card stack"><div class="row"><div class="grow"><div class="ex-zh" style="font-size:1.35rem">' + esc(line.zh) + "</div>" +
+      '<div class="muted">' + esc(line.py || "") + "</div><div>" + esc(line.id || "") + "</div></div>" + playBtn(line.zh) + "</div>";
+    if (arr(line.alts).length) {
+      h += "<div><b class=\"small\">Alternatif:</b>" + line.alts.map(function (a) {
+        return '<div class="row"><div class="grow"><span class="zh">' + esc(a.zh) + '</span><div class="small muted">' + esc(a.py || "") + "</div></div>" + playBtn(a.zh, "sm") + "</div>";
+      }).join("") + "</div>";
+    }
+    if (line.note) h += '<div class="tip small">💡 ' + esc(line.note) + "</div>";
+    if (!easy && text) {
+      var sc = similarity(text, line);
+      h += '<div><span class="score-pill">' + sc + '% — ' + (sc >= 80 ? "Mantap" : sc >= 50 ? "Hampir" : "Coba lagi") + '</span> <button type="button" class="btn sm" data-act="rp-again">Ulangi</button></div>';
+    }
+    return h + "</div>";
+  }
+  function roleHtml(d) {
+    if (!RP || RP.id !== d.id) rpStart(d, false);
+    var lines = arr(d.lines);
+    var h = '<section class="panel row between wrap">' + toggleChips() + '<button type="button" class="btn sm" data-act="rp-restart">↺ Mulai ulang</button></section>';
+    h += '<div class="bubbles' + flagsClass() + '">' + RP.shown.map(function (i) { return bubbleHtml(d, lines[i], i); }).join("") + "</div>";
+    if (RP.done) {
+      var turns = learnerTurns(d).length, good = Object.keys(RP.marks).filter(function (k) { return RP.marks[k]; }).length;
+      return h + '<section class="panel center stack"><div style="font-size:3rem">' + (good === turns ? "🎉" : "👏") + "</div><h2>Roleplay selesai</h2><p>Kamu menandai <b>" + good + " / " + turns +
+        "</b> giliran sebagai bisa.</p><p class=\"small muted\">Ulangi sampai lancar, atau lanjut latihan bebas dengan Claude.</p>" +
+        '<button type="button" class="btn primary block" data-act="tmode" data-v="claude">🤖 Latihan dengan Claude</button>' +
+        '<button type="button" class="btn block" data-act="rp-restart">↺ Ulangi roleplay</button><a class="btn block" href="#/talk">Pilih skenario lain</a></section>';
+    }
+    var c = RP.cur, line = lines[c.idx];
+    var role = d.roles && d.roles[d.learner] ? d.roles[d.learner].zh : "Kamu";
+    h += '<section class="panel stack"><div class="task-box"><b>Giliranmu (' + esc(role) + ")</b>" + esc(line.task || "Balas lawan bicaramu.") + "</div>";
+    if (!c.revealed) {
+      if (!c.easy) {
+        h += '<div><textarea id="rp-text" placeholder="Ketik / dikte jawabanmu (opsional)" aria-label="Jawabanmu">' + esc(c.text) + '</textarea><p class="hint">Ucapkan dengan suara keras dulu!</p></div>' +
+          '<div class="row wrap"><button type="button" class="btn primary" data-act="rp-show">Lihat jawaban</button><button type="button" class="btn" data-act="rp-easy">Mode mudah (pilih)</button></div>';
+      } else {
+        h += '<div class="opts">' + c.opts.map(function (o, i) { return '<button type="button" class="opt" data-act="rp-pick" data-i="' + i + '">' + esc(o) + "</button>"; }).join("") + "</div>";
+      }
+    } else {
+      if (c.easy) {
+        var ok = c.opts[c.picked] === line.zh;
+        h += '<div class="opts">' + c.opts.map(function (o, i) {
+          return '<div class="opt ' + (o === line.zh ? "correct" : i === c.picked ? "wrong" : "") + '">' + esc(o) + "</div>";
+        }).join("") + '</div><div class="feedback"><b>' + (ok ? "✅ Tepat!" : "❌ Bukan itu.") + "</b> " + (ok ? "" : "Jawaban yang natural ada di bawah.") + "</div>";
+      }
+      h += answerCard(line, c.text, c.easy);
+      h += '<div class="row wrap"><span class="muted small grow">Bagaimana tadi?</span><button type="button" class="btn" data-act="rp-mark" data-ok="0">🔁 Belum</button><button type="button" class="btn primary" data-act="rp-mark" data-ok="1">✅ Bisa</button></div>';
+    }
+    return h + "</section>";
+  }
+  ACT["rp-show"] = function () { var t = $("#rp-text"); if (RP && RP.cur) { RP.cur.text = t ? t.value : ""; RP.cur.revealed = true; } rerender(); };
+  ACT["rp-easy"] = function () {
+    var d = dlById(TK.id), t = $("#rp-text");
+    if (!RP || !RP.cur || !d) return;
+    var line = d.lines[RP.cur.idx];
+    RP.cur.text = t ? t.value : "";
+    RP.cur.easy = true;
+    RP.cur.opts = shuffle([line.zh].concat(arr(line.distractors).slice(0, 2)));
+    rerender();
+  };
+  ACT["rp-pick"] = function (el) { if (RP && RP.cur) { RP.cur.picked = +el.getAttribute("data-i"); RP.cur.revealed = true; rerender(); } };
+  ACT["rp-again"] = function () { if (RP && RP.cur) { RP.cur.revealed = false; RP.cur.easy = false; RP.cur.text = ""; RP.cur.picked = null; rerender(); } };
+  ACT["rp-mark"] = function (el) {
+    var d = dlById(TK.id);
+    if (!d || !RP || !RP.cur) return;
+    RP.marks[RP.cur.idx] = el.getAttribute("data-ok") === "1";
+    RP.shown.push(RP.cur.idx); RP.i = RP.cur.idx + 1;
+    rpAdvance(d, true);
+    rerender();
+    var bs = $$(".bubble");
+    if (bs.length) { try { bs[bs.length - 1].scrollIntoView({ block: "center", behavior: "smooth" }); } catch (e) {} }
+  };
+  ACT["rp-restart"] = function () { TTS.stop(); var d = dlById(TK.id); if (d) rpStart(d, true); TK.mode = "role"; rerender(); };
+
+  /* ---- c) shadowing ---- */
+  function shadowHtml(d) {
+    return '<section class="panel stack"><div class="row between wrap">' + toggleChips() + rateSeg() + "</div></section>" +
+      '<section class="panel stack" id="sh-area"></section>';
+  }
+  function shStop() {
+    SH.tok++; SH.auto = false;
+    if (SH.timer) { clearTimeout(SH.timer); SH.timer = null; }
+    TTS.stop();
+  }
+  function shDraw(d) {
+    d = d || dlById(TK.id);
+    var area = $("#sh-area");
+    if (!d || !area) return;
+    var lines = arr(d.lines), l = lines[SH.i];
+    if (!l) { area.innerHTML = '<p class="muted center">Tidak ada baris.</p>'; return; }
+    var role = d.roles && d.roles[l.who] ? d.roles[l.who] : { zh: l.who, id: "" };
+    area.innerHTML = '<div class="row between"><span class="badge brand">' + (SH.i + 1) + " / " + lines.length + '</span><span class="small muted">' + esc(role.zh) + " · " + esc(role.id) + "</span></div>" +
+      '<div class="sh-line">' + esc(l.zh) + "</div>" +
+      (TK.py ? '<div class="center muted">' + esc(l.py || "") + "</div>" : "") +
+      (TK.tr ? '<div class="center small">' + esc(l.id || "") + "</div>" : "") +
+      '<div class="countbar" aria-hidden="true"><i id="cbar"></i></div>' +
+      '<div class="row wrap" style="justify-content:center"><button type="button" class="btn primary" data-act="sh-listen">▶ Dengar</button><button type="button" class="btn soft" data-act="sh-turn">🎙️ Giliranku</button></div>' +
+      '<div class="row between"><button type="button" class="btn" data-act="sh-prev"' + (SH.i ? "" : " disabled") + '>‹ Sebelumnya</button>' +
+      '<button type="button" class="chip ' + (SH.auto ? "on" : "") + '" data-act="sh-auto">' + (SH.auto ? "■ Otomatis" : "↻ Otomatis") + '</button>' +
+      '<button type="button" class="btn" data-act="sh-next"' + (SH.i < lines.length - 1 ? "" : " disabled") + ">Berikutnya ›</button></div>";
+  }
+  function shDrawCur() { shDraw(); }
+  function shCountdown(l, cb) {
+    var ms = Math.max(1500, 450 * Array.from(l.zh).length / TK.rate), bar = $("#cbar");
+    if (bar) {
+      bar.style.transition = "none"; bar.style.width = "0%";
+      void bar.offsetWidth;
+      bar.style.transition = "width " + ms + "ms linear"; bar.style.width = "100%";
+    }
+    if (SH.timer) clearTimeout(SH.timer);
+    SH.timer = setTimeout(function () { SH.timer = null; if (cb) cb(); }, ms);
+  }
+  function shLine() { var d = dlById(TK.id); return d ? arr(d.lines)[SH.i] : null; }
+  ACT["sh-listen"] = function () { var l = shLine(); if (l) { shStop(); TTS.speak(l.zh, { rate: TK.rate }); } };
+  ACT["sh-turn"] = function () { var l = shLine(); if (l) { shStop(); shCountdown(l); } };
+  ACT["sh-prev"] = function () { shStop(); if (SH.i > 0) SH.i--; shDraw(); };
+  ACT["sh-next"] = function () { shStop(); var d = dlById(TK.id); if (d && SH.i < d.lines.length - 1) SH.i++; shDraw(); };
+  ACT["sh-auto"] = function () {
+    var d = dlById(TK.id);
+    if (!d) return;
+    if (SH.auto) { shStop(); shDraw(d); return; }
+    shStop(); SH.auto = true;
+    var tok = ++SH.tok;
+    shDraw(d);
+    (function step() {
+      if (tok !== SH.tok) return;
+      var l = d.lines[SH.i];
+      TTS.speak(l.zh, { rate: TK.rate, onend: function () {
+        if (tok !== SH.tok) return;
+        shCountdown(l, function () {
+          if (tok !== SH.tok) return;
+          if (SH.i < d.lines.length - 1) { SH.i++; shDraw(d); step(); }
+          else { SH.auto = false; shDraw(d); }
+        });
+      } });
+    })();
+  };
+
+  /* =========================================================
+   * 9. Quiz
+   * ========================================================= */
+  var QZ = { decks: [], type: "meaning", len: 10, qs: null, i: 0, score: 0, chosen: null, misses: [] };
+
+  function quizPool() { return cardsOf(QZ.decks).filter(function (c) { return c.id_meaning; }); }
+  function makeQ(c, type, pool) {
+    var t = type === "mix" ? ["meaning", "hanzi", "listen"][Math.floor(Math.random() * 3)] : type;
+    var label = function (x) { return t === "hanzi" ? x.zh : x.id_meaning; };
+    var used = {}; used[label(c)] = true;
+    var same = shuffle(pool.filter(function (x) { return x.key !== c.key && x.deck === c.deck; }));
+    var other = shuffle(pool.filter(function (x) { return x.key !== c.key && x.deck !== c.deck; }));
+    var opts = [c];
+    same.concat(other).forEach(function (x) {
+      if (opts.length >= 4 || used[label(x)]) return;
+      used[label(x)] = true; opts.push(x);
+    });
+    return { key: c.key, t: t, opts: shuffle(opts).map(function (x) { return { key: x.key, label: label(x) }; }) };
+  }
+  SCREENS.quiz = function () {
+    if (QZ.qs) return quizPlay();
+    var pool = quizPool();
+    var h = head("Kuis", "Uji ingatanmu dengan pilihan ganda");
+    var chips = '<button type="button" class="chip ' + (!QZ.decks.length ? "on" : "") + '" data-act="qz-deck" data-d="all">Semua</button>';
+    DECKS.forEach(function (d) {
+      if (!CARDS.some(function (c) { return c.deck === d.id; })) return;
+      chips += '<button type="button" class="chip ' + (QZ.decks.indexOf(d.id) >= 0 ? "on" : "") + '" data-act="qz-deck" data-d="' + esc(d.id) + '">' + esc(d.icon) + " " + esc(d.name) + "</button>";
+    });
+    h += '<div class="stack"><section class="panel"><h2>Dek</h2><div class="chips">' + chips + "</div></section>";
+    h += '<section class="panel"><h2>Jenis soal</h2><div class="seg">' + [["meaning", "Arti"], ["hanzi", "Hanzi"], ["listen", "Dengar"], ["mix", "Campur"]].map(function (x) {
+      return '<button type="button" class="' + (QZ.type === x[0] ? "on" : "") + '" data-act="qz-type" data-v="' + x[0] + '">' + x[1] + "</button>";
+    }).join("") + '</div><h2 class="mt">Jumlah soal</h2><div class="seg" style="max-width:240px">' + [10, 20].map(function (n) {
+      return '<button type="button" class="' + (QZ.len === n ? "on" : "") + '" data-act="qz-len" data-v="' + n + '">' + n + "</button>";
+    }).join("") + "</div></section>";
+    h += '<button type="button" class="btn primary block" data-act="qz-start"' + (pool.length >= 4 ? "" : " disabled") + ">Mulai kuis (" + pool.length + " kartu tersedia)</button>" +
+      (pool.length < 4 ? '<p class="muted center small">Butuh minimal 4 kartu di dek terpilih.</p>' : "") + "</div>";
+    view(h);
+  };
+  ACT["qz-deck"] = function (el) {
+    var d = el.getAttribute("data-d");
+    if (d === "all") QZ.decks = []; else { var i = QZ.decks.indexOf(d); if (i >= 0) QZ.decks.splice(i, 1); else QZ.decks.push(d); }
+    rerender();
+  };
+  ACT["qz-type"] = function (el) { QZ.type = el.getAttribute("data-v"); rerender(); };
+  ACT["qz-len"] = function (el) { QZ.len = +el.getAttribute("data-v"); rerender(); };
+  ACT["qz-start"] = function () {
+    var pool = quizPool();
+    if (pool.length < 4) { toast("Butuh minimal 4 kartu"); return; }
+    QZ.qs = shuffle(pool).slice(0, QZ.len).map(function (c) { return makeQ(c, QZ.type, pool); });
+    QZ.i = 0; QZ.score = 0; QZ.chosen = null; QZ.misses = [];
+    rerender(); W.scrollTo(0, 0);
+    var q = QZ.qs[0]; if (q && q.t === "listen") TTS.speak(CARD[q.key].zh, { rate: S.settings.rate });
+  };
+  ACT["qz-quit"] = function () { QZ.qs = null; TTS.stop(); rerender(); };
+  function quizPlay() {
+    var h = '<header class="screen-head"><button type="button" class="btn sm" data-act="qz-quit">‹ Keluar</button><span class="muted">Kuis</span></header>';
+    if (QZ.i >= QZ.qs.length) {
+      var n = QZ.qs.length;
+      h += '<div class="stack"><section class="panel center"><div style="font-size:3rem">' + (QZ.score >= n * 0.8 ? "🎉" : QZ.score >= n * 0.5 ? "👍" : "💪") + "</div><h2>Skor " + QZ.score + " / " + n + "</h2><p class=\"muted\">" + pct(QZ.score, n) + "% benar</p></section>";
+      if (QZ.misses.length) {
+        h += '<section class="panel"><h2>Yang masih salah</h2>' + QZ.misses.map(function (k) {
+          var c = CARD[k];
+          return c ? '<div class="deck-row"><div class="grow"><div class="zh" style="font-size:1.25rem">' + tcolor(c.zh, c.py) + '</div><div class="small muted">' + esc(c.py || "") + " · " + esc(c.id_meaning || "") + "</div></div>" + playBtn(c.zh, "sm") +
+            '<button type="button" class="btn sm" data-act="qz-review" data-k="' + esc(k) + '">Masukkan ke review</button></div>' : "";
+        }).join("") + '<button type="button" class="btn soft block mt" data-act="qz-review" data-k="all">Masukkan semua ke review</button></section>';
+      }
+      h += '<button type="button" class="btn primary block" data-act="qz-again">Kuis lagi</button></div>';
+      view(h); return;
+    }
+    var q = QZ.qs[QZ.i], c = CARD[q.key];
+    h += '<div class="progress-line" style="margin-top:0"><span>' + (QZ.i + 1) + " / " + QZ.qs.length + '</span><div class="bar"><i style="width:' + pct(QZ.i, QZ.qs.length) + '%"></i></div></div>';
+    h += '<section class="panel mt"><div class="quiz-q">';
+    if (q.t === "meaning") h += '<div class="big-hanzi">' + tcolor(c.zh, c.py) + "</div>" + (S.settings.showPinyin && c.py ? '<div class="muted">' + esc(c.py) + "</div>" : "") + '<div class="muted small mt">Apa artinya?</div>';
+    else if (q.t === "hanzi") h += '<div class="front-mean">' + esc(c.id_meaning) + '</div><div class="muted small mt">Pilih kata Mandarin yang tepat</div>';
+    else h += '<button type="button" class="listen-btn" data-act="speak" data-t="' + esc(c.zh) + '" aria-label="Putar audio">🔊</button><div class="muted small mt">Dengar, lalu pilih artinya</div>';
+    h += '</div><div class="opts">';
+    q.opts.forEach(function (o, i) {
+      var cls = "opt";
+      if (QZ.chosen != null) { if (o.key === q.key) cls += " correct"; else if (i === QZ.chosen) cls += " wrong"; }
+      h += '<button type="button" class="' + cls + '" ' + (QZ.chosen != null ? "disabled" : "") + ' data-act="qz-ans" data-i="' + i + '">' + esc(o.label) + "</button>";
+    });
+    h += "</div>";
+    if (QZ.chosen != null) {
+      var ok = q.opts[QZ.chosen].key === q.key;
+      h += '<div class="feedback"><div class="row"><div class="grow"><b>' + (ok ? "✅ Benar!" : "❌ Kurang tepat") + '</b><div class="ex-zh" style="font-size:1.3rem">' + tcolor(c.zh, c.py) + '</div><div class="muted small">' + esc(c.py || "") +
+        "</div><div>" + esc(c.id_meaning || "") + "</div></div>" + playBtn(c.zh) + '</div></div><button type="button" class="btn primary block mt" data-act="qz-next">' + (QZ.i + 1 >= QZ.qs.length ? "Lihat skor" : "Lanjut") + "</button>";
+    }
+    h += "</section>";
+    view(h);
+  }
+  ACT["qz-ans"] = function (el) {
+    if (QZ.chosen != null) return;
+    var q = QZ.qs[QZ.i], i = +el.getAttribute("data-i");
+    QZ.chosen = i;
+    if (q.opts[i].key === q.key) QZ.score++; else if (QZ.misses.indexOf(q.key) < 0) QZ.misses.push(q.key);
+    TTS.speak(CARD[q.key].zh, { rate: S.settings.rate });
+    quizPlay();
+  };
+  ACT["qz-next"] = function () {
+    QZ.i++; QZ.chosen = null; quizPlay(); W.scrollTo(0, 0);
+    var q = QZ.qs[QZ.i];
+    if (q && q.t === "listen") TTS.speak(CARD[q.key].zh, { rate: S.settings.rate });
+  };
+  ACT["qz-again"] = function () { QZ.qs = null; rerender(); };
+  ACT["qz-review"] = function (el) {
+    var k = el.getAttribute("data-k"), keys = k === "all" ? QZ.misses.slice() : [k];
+    keys.forEach(function (key) {
+      if (!CARD[key]) return;
+      var st = S.srs[key] || SRS.fresh();
+      st.due = today(); S.srs[key] = st;
+    });
+    save(); CS.fresh = true;
+    $$('[data-act="qz-review"]').forEach(function (b) { if (k === "all" || b === el) { b.disabled = true; b.textContent = "✓ Masuk review"; } });
+    toast("Masuk antrean review");
+  };
+
+  /* =========================================================
+   * 10. Settings
+   * ========================================================= */
+  function segHtml(key, vals, labels, cur) {
+    return '<div class="seg">' + vals.map(function (v, i) {
+      return '<button type="button" class="' + (String(cur) === String(v) ? "on" : "") + '" data-act="set" data-k="' + key + '" data-v="' + v + '">' + labels[i] + "</button>";
+    }).join("") + "</div>";
+  }
+  function switchRow(key, label) {
+    return '<label class="switch-row"><span>' + label + '</span><input type="checkbox" data-chg="set-bool" data-k="' + key + '" ' + (S.settings[key] ? "checked" : "") + "></label>";
+  }
+  SCREENS.settings = function () {
+    var st = TTS.status();
+    var h = head("Pengaturan", "Versi " + VERSION, '<a class="icon-btn" href="#/home" aria-label="Beranda">🏠</a>');
+    h += '<div class="stack"><section class="panel"><h2>Tampilan kartu</h2>' + switchRow("showPinyin", "Tampilkan pinyin") + switchRow("showEnglish", "Tampilkan English") + switchRow("toneColors", "Warna nada") +
+      '<p class="small mt"><span class="zh"><span class="t1">妈</span> <span class="t2">麻</span> <span class="t3">馬</span> <span class="t4">罵</span> <span class="t5">嗎</span></span> nada 1–4 &amp; netral</p></section>';
+    h += '<section class="panel"><h2>Tema</h2>' + segHtml("theme", ["auto", "light", "dark"], ["Otomatis", "Terang", "Gelap"], S.settings.theme) + "</section>";
+    h += '<section class="panel"><h2>Kartu baru per hari</h2>' + segHtml("newPerDay", [5, 10, 15, 20, 30], [5, 10, 15, 20, 30], S.settings.newPerDay) + "</section>";
+    h += '<section class="panel"><h2>Audio</h2><p class="small muted">Kecepatan bicara</p>' + segHtml("rate", [0.6, 0.7, 0.85, 1, 1.2], ["0.6×", "0.7×", "0.85×", "1×", "1.2×"], S.settings.rate) +
+      '<div class="row wrap mt"><button type="button" class="btn soft" data-act="test-voice">🔊 Tes suara</button><span class="small muted">' +
+      (st === "none" ? "Tidak ada suara Mandarin terdeteksi" : "Suara: " + esc(TTS.voiceName())) + "</span></div>" + (st !== "tw" ? '<div class="mt">' + ttsHelpHtml().replace('class="panel tip warn"', 'class="tip warn"') + "</div>" : "") + "</section>";
+    h += '<section class="panel"><h2>Kartu dari Claude (' + S.custom.length + ")</h2>";
+    if (!S.custom.length) h += '<p class="small muted">Belum ada. Impor lewat tab Bicara → Claude.</p>';
+    S.custom.forEach(function (c) {
+      h += '<div class="deck-row"><div class="grow"><div class="zh" style="font-size:1.15rem">' + esc(c.zh) + '</div><div class="small muted">' + esc(c.py || "") + " " + esc(c.id_meaning || "") + '</div></div>' +
+        '<button type="button" class="icon-btn" data-act="cc-del" data-id="' + esc(c.id) + '" aria-label="Hapus kartu">🗑️</button></div>';
+    });
+    h += "</section>";
+    h += '<section class="panel"><h2>Data</h2><p class="small muted">Progres tersimpan di perangkat ini. Untuk memindahkan, pakai bagian "Pindah progres" di Beranda.</p><button type="button" class="btn danger" data-act="reset-all">Reset semua progres</button></section>';
+    h += '<p class="center muted small">華語 B2 Flashcard v' + VERSION + " · " + CARDS.length + " kartu · " + grammarList().length + " pola · " + arr(W.DIALOGUES).length + " dialog</p></div>";
+    view(h);
+  };
+  ACT.set = function (el) {
+    var k = el.getAttribute("data-k"), v = el.getAttribute("data-v");
+    S.settings[k] = (k === "rate" || k === "newPerDay") ? +v : v;
+    save(); applyTheme();
+    if (k === "newPerDay") CS.fresh = true;
+    rerender();
+  };
+  CHG["set-bool"] = function (el) { S.settings[el.getAttribute("data-k")] = el.checked; save(); applyTheme(); };
+  ACT["test-voice"] = function () { TTS.speak("你好，歡迎來到華語課。今天我們練習開會。", { rate: S.settings.rate }); };
+  ACT["cc-del"] = function (el) {
+    var id = el.getAttribute("data-id");
+    S.custom = S.custom.filter(function (c) { return c.id !== id; });
+    delete S.srs["c:" + id];
+    save(); rebuildCards(); CS.fresh = true; rerender();
+  };
+  ACT["reset-all"] = function () {
+    confirmModal("Hapus semua progres, pengaturan, dan kartu dari Claude di perangkat ini? Tindakan ini tidak bisa dibatalkan.", "Reset", function () {
+      S = defaults(); save(); applyTheme(); rebuildCards(); CS.fresh = true; QZ.qs = null; MX = null; RP = null;
+      toast("Progres direset"); go("#/home");
+    }, true);
+  };
+
+  /* =========================================================
+   * 11. Service worker + boot
+   * ========================================================= */
+  function showUpdateBanner(reg) {
+    var root = $("#banner-root");
+    if (!root || root.firstChild) return;
+    root.innerHTML = '<div class="update-banner"><span>Versi baru tersedia</span><button type="button" class="btn sm" data-act="sw-update">Perbarui</button></div>';
+    ACT["sw-update"] = function () {
+      var w = reg.waiting || reg.installing;
+      if (w) w.postMessage({ type: "SKIP_WAITING" }); else W.location.reload();
+    };
+  }
+  function registerSW() {
+    if (!("serviceWorker" in navigator) || !/^https?:$/.test(location.protocol)) return;
+    var hadController = !!navigator.serviceWorker.controller, reloading = false;
+    navigator.serviceWorker.addEventListener("controllerchange", function () {
+      if (!hadController || reloading) { hadController = true; return; }
+      reloading = true; W.location.reload();
+    });
+    navigator.serviceWorker.register("./sw.js").then(function (reg) {
+      if (reg.waiting && navigator.serviceWorker.controller) showUpdateBanner(reg);
+      reg.addEventListener("updatefound", function () {
+        var nw = reg.installing;
+        if (!nw) return;
+        nw.addEventListener("statechange", function () {
+          if (nw.state === "installed" && navigator.serviceWorker.controller) showUpdateBanner(reg);
+        });
+      });
+    }).catch(function () {});
+  }
+
+  function boot() {
+    rebuildCards(); applyTheme();
+    W.addEventListener("hashchange", route);
+    route();
+    registerSW();
+  }
+  if (D.readyState === "loading") D.addEventListener("DOMContentLoaded", boot); else boot();
+
+  /* test hook (used by the Node smoke test only) */
+  W.__mb2 = { parseCards: parseCards, similarity: similarity, makeQ: makeQ };
+})();
