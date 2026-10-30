@@ -2,7 +2,7 @@
 (function () {
   "use strict";
   var W = window, D = document;
-  var VERSION = "1.2.2";
+  var VERSION = "1.2.3";
   var KEY = "mb2.v1";
 
   /* =========================================================
@@ -320,11 +320,46 @@
     if (/Macintosh|Mac OS X/i.test(ua)) return "mac";
     return "other";
   }
+  // Merek HP Android: Chrome menyembunyikan model di user-agent ("Android 10; K"), jadi baca kode model
+  // lewat UA Client Hints (mis. POCO X7 = "24095PCADG") lalu petakan ke merek.
+  var DEVICE = { model: "", brand: null };
+  var BRAND = { xiaomi: "Xiaomi / POCO / Redmi", samsung: "Samsung", oppo: "OPPO / OnePlus", realme: "realme", vivo: "vivo", transsion: "Infinix / TECNO", pixel: "Google Pixel" };
+  function brandOf(model) {
+    var s = model + " " + (navigator.userAgent || "");
+    if (/SamsungBrowser|\bSM-[A-Z0-9]/i.test(s)) return "samsung";
+    if (/\b(POCO|Redmi|Xiaomi)\b|\bMi \d/i.test(s) || /^(\d{4,5}[A-Z0-9]{2,6}|M\d{4}[A-Z0-9]{2,5})$/.test(model.trim())) return "xiaomi";
+    if (/\bRMX\d{4}|realme/i.test(s)) return "realme";
+    if (/\bCPH\d{4}|OPPO|OnePlus/i.test(s)) return "oppo";
+    if (/\bV\d{4}[A-Z]?\b|vivo/i.test(s)) return "vivo";
+    if (/Infinix|TECNO|itel/i.test(s)) return "transsion";
+    if (/Pixel/i.test(s)) return "pixel";
+    return null;
+  }
+  // cadangan: browser lama/Mi Browser/WebView masih menulis model di UA ("Android 14; 24095PCADG Build/…")
+  function uaModel() {
+    var m = /Android [\d.]+; ([^;)]+?)(?: Build\/[^;)]*)?\)/.exec(navigator.userAgent || "");
+    return m && m[1] !== "K" ? m[1].trim() : "";
+  }
+  DEVICE.model = uaModel();
+  DEVICE.brand = brandOf(DEVICE.model);
+  try {
+    if (navigator.userAgentData && navigator.userAgentData.getHighEntropyValues) {
+      navigator.userAgentData.getHighEntropyValues(["model"]).then(function (v) {
+        DEVICE.model = (v && v.model) || DEVICE.model;
+        DEVICE.brand = brandOf(DEVICE.model);
+        if (CUR.name === "home" || CUR.name === "settings") rerender();
+      }, function () {});
+    }
+  } catch (e) {}
+  function brandLabel() {
+    if (/POCO/i.test(DEVICE.model)) return "POCO";
+    return DEVICE.brand ? BRAND[DEVICE.brand] : "Android";
+  }
   // panduan pasang suara Taiwan sesuai perangkat; Windows bisa langsung membuka Settings lewat ms-settings:
   // (iOS/Android tidak mengizinkan web membuka Pengaturan, jadi tampilkan langkah yang tepat)
   function ttsHelpHtml(open) {
     var p = platform(), st = TTS.status();
-    var dev = { ios: "iPhone/iPad", android: "Android", windows: "Windows", mac: "Mac", other: "perangkat ini" }[p];
+    var dev = { ios: "iPhone/iPad", android: brandLabel(), windows: "Windows", mac: "Mac", other: "perangkat ini" }[p];
     function li(t, d) { return "<li><b>" + t + "</b><span>" + d + "</span></li>"; }
     var recheck = '<button type="button" class="btn" data-act="tts-recheck">' + I("repeat") + " Cek lagi</button>";
     var body = "";
@@ -345,10 +380,21 @@
         li("Tutup app ini lalu buka lagi", "Geser app ke atas dari app switcher, buka lagi, lalu tekan <b>Cek lagi</b>.") + "</ol>" +
         '<p class="small muted mt">Terdengar seperti bahasa Kanton? Di Voices → Chinese, pastikan yang dipilih Taiwan, bukan Hong Kong.</p><div class="tts-actions">' + recheck + "</div>";
     } else if (p === "android") {
-      body += '<ol class="install-steps">' +
-        li("Settings → System → Languages", "Di Samsung: General management → Language.") +
-        li("Text-to-speech output", "Pilih mesin <b>Google</b> → ikon roda gigi → <b>Install voice data</b>.") +
-        li("Unduh 中文（台灣）", "Lalu tutup dan buka lagi app ini, tekan <b>Cek lagi</b>.") + '</ol><div class="tts-actions">' + recheck + "</div>";
+      // langkah utama memakai kotak cari Setelan (berlaku di semua merek); petunjuk merek hanya tambahan
+      var hint = {
+        xiaomi: " Di HyperOS/MIUI menu ini biasanya ada di <b>Setelan tambahan</b>.",
+        samsung: " Di Samsung (One UI) biasanya di <b>General management → Text-to-speech</b>.",
+        pixel: " Di Pixel: <b>System → Languages → Text-to-speech output</b>."
+      }[DEVICE.brand] || "";
+      var engineNote = (DEVICE.brand === "xiaomi" || DEVICE.brand === "samsung") ? " Mesin bawaan " + (DEVICE.brand === "xiaomi" ? "Xiaomi" : "Samsung") + " belum tentu punya suara Taiwan, jadi ganti ke Google." : "";
+      if (DEVICE.model || DEVICE.brand) body += '<p class="small muted">Terdeteksi: <b>' + esc(brandLabel()) + "</b>" + (DEVICE.model ? " · model " + esc(DEVICE.model) : "") + "</p>";
+      body += '<div class="tts-actions"><a class="btn primary" href="https://play.google.com/store/apps/details?id=com.google.android.tts" target="_blank" rel="noopener">' +
+        I("down") + " Speech Services by Google</a>" + recheck + "</div>" +
+        '<ol class="install-steps">' +
+        li("Setelan → cari \"ucapan\"", "Ketik <b>ucapan</b> (atau <b>speech</b>) di kotak cari Setelan, buka <b>Output teks-ke-ucapan</b>." + hint) +
+        li("Mesin pilihan → Google", "Pilih <b>Speech Services by Google</b> (Layanan Ucapan oleh Google)." + engineNote + " Belum ada? Pasang lewat tombol di atas.") +
+        li("Ikon roda gigi → Instal data suara", "Pilih <b>中文（台灣）/ Chinese (Taiwan)</b>, lalu unduh.") +
+        li("Tutup Chrome, buka lagi app ini", "Hapus dari daftar app terbaru, buka lagi, lalu tekan <b>Cek lagi</b>.") + "</ol>";
     } else if (p === "mac") {
       body += '<ol class="install-steps">' +
         li("System Settings → Accessibility", "Read &amp; Speak (macOS lama: Spoken Content).") +
