@@ -434,3 +434,7 @@ h1, h2 { text-wrap: balance; }
 .tts-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 6px 0 12px; }
 .tts-help .install-steps { margin-top: 4px; }
 .tts-help .install-steps li::before { background: var(--surface); }
+
+/* ---------- Diagnostik suara ---------- */
+details.diag > summary { cursor: pointer; min-height: 32px; }
+.diag-out { white-space: pre-wrap; word-break: break-word; font: 12px/1.5 ui-monospace, Consolas, monospace; background: var(--surface2); border-radius: 10px; padding: 10px 12px; margin: 10px 0; max-height: 280px; overflow: auto; }

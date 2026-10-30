@@ -2,31 +2,33 @@
 (function (W) {
   "use strict";
   var synth = W.speechSynthesis || null;
-  var voice = null, cbs = [], seqToken = 0;
+  var voice = null, cbs = [], seqToken = 0, lastError = "";
   var PREF = ["meijia", "hanhan", "yating", "zhiwei", "hsiaochen", "hsiaoyu", "mei-jia", "tracy"];
 
   function isCanto(v) { return /zh[-_]hk|yue|cantonese|sinji|tingting.*hk/i.test((v.lang || "") + " " + (v.name || "")); }
-  function norm(l) { return String(l || "").replace("_", "-").toLowerCase(); }
+  function norm(l) { return String(l || "").replace(/_/g, "-").toLowerCase(); }
+  // Android (Google TTS) melaporkan Mandarin Taiwan sebagai "cmn-TW"; browser lain "zh-TW", "zh-Hant-TW", "zh_TW"
+  function isTw(v) {
+    var l = norm(v.lang);
+    if (l === "zh-tw" || l === "cmn-tw" || l === "cmn-hant-tw" || l === "zh-hant-tw" || l === "zh-hant") return true;
+    return (l === "zh" || l === "cmn") && /taiwan|台灣|臺灣|國語/i.test(v.name || "");
+  }
+  function isMandarin(v) { var l = norm(v.lang); return (l.indexOf("zh") === 0 || l.indexOf("cmn") === 0) && !isCanto(v); }
 
   function pick() {
     if (!synth) { voice = null; return; }
     var vs = [];
     try { vs = synth.getVoices() || []; } catch (e) {}
-    var found = null, i, v;
-    var tw = vs.filter(function (x) { return norm(x.lang) === "zh-tw" && !isCanto(x); });
+    var found = null, i;
+    var tw = vs.filter(function (x) { return isTw(x) && !isCanto(x); });
     if (tw.length) {
       for (i = 0; i < PREF.length && !found; i++) {
         for (var j = 0; j < tw.length; j++) if (tw[j].name.toLowerCase().indexOf(PREF[i]) >= 0) { found = tw[j]; break; }
       }
-      found = found || tw[0];
+      // utamakan suara lokal (offline) bila ada
+      found = found || tw.filter(function (x) { return x.localService; })[0] || tw[0];
     }
-    if (!found) found = vs.filter(function (x) { return norm(x.lang) === "cmn-hant-tw"; })[0] || null;
-    if (!found) {
-      found = vs.filter(function (x) { var l = norm(x.lang); return (l === "zh-cn" || l.indexOf("cmn") === 0) && !isCanto(x); })[0] || null;
-    }
-    if (!found) {
-      for (i = 0; i < vs.length; i++) { v = vs[i]; if (norm(v.lang).indexOf("zh") === 0 && !isCanto(v)) { found = v; break; } }
-    }
+    if (!found) found = vs.filter(isMandarin)[0] || null;
     voice = found;
     for (i = 0; i < cbs.length; i++) { try { cbs[i](); } catch (e) {} }
   }
@@ -37,8 +39,7 @@
 
   function status() {
     if (!synth || !voice) return "none";
-    var l = norm(voice.lang);
-    return (l === "zh-tw" || l === "cmn-hant-tw") ? "tw" : "zh-other";
+    return isTw(voice) ? "tw" : "zh-other";
   }
   function stop() { seqToken++; if (synth) { try { synth.cancel(); } catch (e) {} } }
 
@@ -46,15 +47,22 @@
   function raw(text, opts) {
     opts = opts || {};
     if (!synth || !text) { if (opts.onend) setTimeout(opts.onend, 0); return false; }
-    try { synth.cancel(); } catch (e) {}
+    // Chrome Android: cancel() lalu speak() seketika sering membuat ucapan baru diam → cancel hanya jika sedang bicara, beri jeda
+    var busy = false;
+    try { busy = synth.speaking || synth.pending; } catch (e) {}
+    if (busy) { try { synth.cancel(); } catch (e) {} }
     var u = new W.SpeechSynthesisUtterance(String(text));
-    u.lang = voice ? voice.lang : "zh-TW";
-    if (voice) u.voice = voice;
+    var v = opts.noVoice ? null : voice;
+    u.lang = v ? String(v.lang).replace(/_/g, "-") : "zh-TW";
+    if (v) u.voice = v;
     u.rate = opts.rate || 0.85;
     var done = false;
-    function fin() { if (done) return; done = true; if (opts.onend) opts.onend(); }
+    function fin(ev) { if (done) return; done = true; if (ev && ev.error) lastError = ev.error; if (opts.onend) opts.onend(); }
     u.onend = fin; u.onerror = fin;
-    try { synth.speak(u); } catch (e) { fin(); return false; }
+    function go() {
+      try { if (synth.paused) synth.resume(); synth.speak(u); } catch (e) { lastError = String(e && e.message || e); fin(); }
+    }
+    if (busy) setTimeout(go, 120); else go();
     return true;
   }
 
@@ -74,6 +82,17 @@
   function voiceName() { return voice ? voice.name + " (" + voice.lang + ")" : ""; }
   function onChange(cb) { cbs.push(cb); }
 
+  // diag: apa yang benar-benar dilihat browser (untuk panel Diagnostik suara)
+  function diag() {
+    var vs = [];
+    try { vs = synth ? synth.getVoices() || [] : []; } catch (e) {}
+    return {
+      supported: !!synth, total: vs.length, chosen: voiceName(), status: status(), lastError: lastError,
+      zh: vs.filter(function (x) { return isMandarin(x) || isCanto(x); }).map(function (x) {
+        return { name: x.name, lang: x.lang, local: !!x.localService, tw: isTw(x), canto: isCanto(x) };
+      })
+    };
+  }
   // refresh: baca ulang daftar suara (dipakai tombol "Cek lagi" setelah pengguna memasang suara)
-  W.TTS = { speak: speak, speakSeq: speakSeq, stop: stop, status: status, voiceName: voiceName, onChange: onChange, refresh: pick, supported: !!synth };
+  W.TTS = { speak: speak, speakSeq: speakSeq, stop: stop, status: status, voiceName: voiceName, onChange: onChange, refresh: pick, diag: diag, supported: !!synth };
 })(typeof window !== "undefined" ? window : this);

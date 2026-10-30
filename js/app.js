@@ -2,7 +2,7 @@
 (function () {
   "use strict";
   var W = window, D = document;
-  var VERSION = "1.2.3";
+  var VERSION = "1.2.4";
   var KEY = "mb2.v1";
 
   /* =========================================================
@@ -1522,7 +1522,7 @@
     h += '<section class="panel"><h2>Kartu baru per hari</h2>' + segHtml("newPerDay", [5, 10, 15, 20, 30], [5, 10, 15, 20, 30], S.settings.newPerDay) + "</section>";
     h += '<section class="panel"><h2>Audio</h2><p class="small muted">Kecepatan bicara</p>' + segHtml("rate", [0.6, 0.7, 0.85, 1, 1.2], ["0.6×", "0.7×", "0.85×", "1×", "1.2×"], S.settings.rate) +
       '<div class="row wrap mt"><button type="button" class="btn soft" data-act="test-voice">' + I("vol") + ' Tes suara</button><span class="small muted">' +
-      (st === "none" ? "Tidak ada suara Mandarin terdeteksi" : "Suara: " + esc(TTS.voiceName())) + "</span></div>" + (st !== "tw" ? '<div class="mt">' + ttsHelpHtml(true).replace('class="panel tip warn tts-help"', 'class="tip warn tts-help"') + "</div>" : "") + "</section>";
+      (st === "none" ? "Tidak ada suara Mandarin terdeteksi" : "Suara: " + esc(TTS.voiceName())) + "</span></div>" + (st !== "tw" ? '<div class="mt">' + ttsHelpHtml(true).replace('class="panel tip warn tts-help"', 'class="tip warn tts-help"') + "</div>" : "") + diagHtml() + "</section>";
     h += '<section class="panel"><h2>Kartu dari Claude (' + S.custom.length + ")</h2>";
     if (!S.custom.length) h += '<p class="small muted">Belum ada. Impor lewat tab Bicara → Claude.</p>';
     S.custom.forEach(function (c) {
@@ -1544,6 +1544,30 @@
   };
   CHG["set-bool"] = function (el) { S.settings[el.getAttribute("data-k")] = el.checked; save(); applyTheme(); };
   ACT["test-voice"] = function () { TTS.speak("你好，歡迎來到華語課。今天我們練習開會。", { rate: S.settings.rate }); };
+
+  /* Diagnostik suara: menampilkan suara yang benar-benar dilihat browser, supaya masalah di HP bisa dilacak */
+  function diagText() {
+    var d = TTS.diag();
+    var lines = ["華語 B2 v" + VERSION + " · diagnostik suara",
+      "Perangkat: " + platform() + (DEVICE.model ? " · " + DEVICE.model : "") + (DEVICE.brand ? " · " + DEVICE.brand : ""),
+      "Browser: " + (navigator.userAgent || "").slice(0, 160),
+      "speechSynthesis: " + (d.supported ? "ada" : "TIDAK ADA") + " · total suara: " + d.total,
+      "Dipilih: " + (d.chosen || "-") + " · status: " + d.status + (d.lastError ? " · error terakhir: " + d.lastError : ""),
+      "Suara Mandarin/Kanton (" + d.zh.length + "):"];
+    d.zh.forEach(function (v) { lines.push("- " + v.name + " [" + v.lang + "]" + (v.local ? " lokal" : " online") + (v.tw ? " · TAIWAN" : "") + (v.canto ? " · kanton" : "")); });
+    return lines.join("\n");
+  }
+  function diagHtml() {
+    return '<details class="diag mt"><summary><b>Diagnostik suara</b> <span class="small muted">· kalau audio tidak keluar</span></summary>' +
+      '<pre class="diag-out" id="diag-out">' + esc(diagText()) + "</pre>" +
+      '<div class="row wrap"><button type="button" class="btn" data-act="diag-plain">' + I("vol") + " Tes tanpa pilih suara</button>" +
+      '<button type="button" class="btn" data-act="diag-refresh">' + I("repeat") + " Muat ulang daftar</button>" +
+      '<button type="button" class="btn soft" data-act="diag-copy">' + I("copy") + " Salin info</button></div>" +
+      '<p class="small muted mt">"Tes tanpa pilih suara" membiarkan HP memilih suara Mandarin sendiri. Kalau tes ini bersuara tapi Tes suara tidak, kirim hasil "Salin info" ke pembuat app.</p></details>';
+  }
+  ACT["diag-plain"] = function () { TTS.speak("你好，這是聲音測試。", { rate: S.settings.rate, noVoice: true }); setTimeout(function () { var o = $("#diag-out"); if (o) o.textContent = diagText(); }, 1500); };
+  ACT["diag-refresh"] = function () { TTS.refresh(); setTimeout(function () { var o = $("#diag-out"); if (o) o.textContent = diagText(); toast("Daftar suara dimuat ulang"); }, 400); };
+  ACT["diag-copy"] = function () { copyText(diagText()).then(function (ok) { toast(ok ? "Info diagnostik disalin" : "Gagal menyalin"); }); };
   ACT["cc-del"] = function (el) {
     var id = el.getAttribute("data-id");
     S.custom = S.custom.filter(function (c) { return c.id !== id; });
