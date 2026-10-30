@@ -2,7 +2,7 @@
 (function (W) {
   "use strict";
   var synth = W.speechSynthesis || null;
-  var voice = null, cbs = [], seqToken = 0, lastError = "";
+  var voice = null, cbs = [], seqToken = 0, lastError = "", lastStart = 0;
   var PREF = ["meijia", "hanhan", "yating", "zhiwei", "hsiaochen", "hsiaoyu", "mei-jia", "tracy"];
 
   function isCanto(v) { return /zh[-_]hk|yue|cantonese|sinji|tingting.*hk/i.test((v.lang || "") + " " + (v.name || "")); }
@@ -57,8 +57,13 @@
     if (v) u.voice = v;
     u.rate = opts.rate || 0.85;
     var done = false;
-    function fin(ev) { if (done) return; done = true; if (ev && ev.error) lastError = ev.error; if (opts.onend) opts.onend(); }
+    function fin(ev) {
+      if (done) return; done = true;
+      if (ev && ev.error) { lastError = ev.error; if (opts.onerror) opts.onerror(ev.error); }
+      if (opts.onend) opts.onend();
+    }
     u.onend = fin; u.onerror = fin;
+    u.onstart = function () { lastStart = Date.now(); if (opts.onstart) opts.onstart(); };
     function go() {
       try { if (synth.paused) synth.resume(); synth.speak(u); } catch (e) { lastError = String(e && e.message || e); fin(); }
     }
@@ -88,6 +93,7 @@
     try { vs = synth ? synth.getVoices() || [] : []; } catch (e) {}
     return {
       supported: !!synth, total: vs.length, chosen: voiceName(), status: status(), lastError: lastError,
+      lastStart: lastStart ? Math.round((Date.now() - lastStart) / 1000) + " dtk lalu" : "belum pernah",
       zh: vs.filter(function (x) { return isMandarin(x) || isCanto(x); }).map(function (x) {
         return { name: x.name, lang: x.lang, local: !!x.localService, tw: isTw(x), canto: isCanto(x) };
       })

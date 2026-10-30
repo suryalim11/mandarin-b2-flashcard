@@ -2,7 +2,7 @@
 (function () {
   "use strict";
   var W = window, D = document;
-  var VERSION = "1.2.4";
+  var VERSION = "1.2.5";
   var KEY = "mb2.v1";
 
   /* =========================================================
@@ -1543,7 +1543,21 @@
     rerender();
   };
   CHG["set-bool"] = function (el) { S.settings[el.getAttribute("data-k")] = el.checked; save(); applyTheme(); };
-  ACT["test-voice"] = function () { TTS.speak("你好，歡迎來到華語課。今天我們練習開會。", { rate: S.settings.rate }); };
+  // Tes suara melapor sendiri: mulai bicara / error mesin / tidak ada respons sama sekali
+  ACT["test-voice"] = function () {
+    if (!TTS.supported) { toast("Browser ini tidak mendukung suara. Pakai Chrome atau Safari."); return; }
+    var started = false, failed = false;
+    TTS.speak("你好，歡迎來到華語課。今天我們練習開會。", {
+      rate: S.settings.rate,
+      onstart: function () { started = true; },
+      onerror: function (e) { failed = true; toast("Mesin suara menolak: " + e + ". Buka Diagnostik suara → Salin info."); var o = $("#diag-out"); if (o) o.textContent = diagText(); }
+    });
+    setTimeout(function () {
+      var o = $("#diag-out"); if (o) o.textContent = diagText();
+      if (started) toast("Mesin suara jalan. Tidak terdengar? Naikkan volume MEDIA (bukan dering).");
+      else if (!failed) toast("Tidak ada respons dari mesin suara HP. Buka Diagnostik suara → Salin info, kirim ke pembuat app.");
+    }, 3000);
+  };
 
   /* Diagnostik suara: menampilkan suara yang benar-benar dilihat browser, supaya masalah di HP bisa dilacak */
   function diagText() {
@@ -1553,6 +1567,7 @@
       "Browser: " + (navigator.userAgent || "").slice(0, 160),
       "speechSynthesis: " + (d.supported ? "ada" : "TIDAK ADA") + " · total suara: " + d.total,
       "Dipilih: " + (d.chosen || "-") + " · status: " + d.status + (d.lastError ? " · error terakhir: " + d.lastError : ""),
+      "Mulai bicara terakhir: " + d.lastStart,
       "Suara Mandarin/Kanton (" + d.zh.length + "):"];
     d.zh.forEach(function (v) { lines.push("- " + v.name + " [" + v.lang + "]" + (v.local ? " lokal" : " online") + (v.tw ? " · TAIWAN" : "") + (v.canto ? " · kanton" : "")); });
     return lines.join("\n");

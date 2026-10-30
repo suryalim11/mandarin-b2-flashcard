@@ -1,5 +1,5 @@
 /* Service worker: precache app shell + data, stale-while-revalidate. Bump CACHE to ship updates (banner "Versi baru tersedia"). */
-const CACHE = "mb2-v8";
+const CACHE = "mb2-v9";
 const CORE = ["./", "./index.html", "./manifest.webmanifest", "./css/style.css", "./fonts/plus-jakarta-sans-latin-wght-normal.woff2",
   "./js/pinyin.js", "./js/srs.js", "./js/tts.js", "./js/app.js",
   "./icons/icon-192.png", "./icons/icon-512.png", "./icons/icon-maskable-512.png", "./icons/apple-touch-icon.png", "./icons/qr-app.svg", "./icons/qr-app.png"];
